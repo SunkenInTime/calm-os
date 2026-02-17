@@ -8,9 +8,9 @@
  * @module
  */
 
+import type * as daily from "../daily.js";
 import type * as ideas from "../ideas.js";
 import type * as tasks from "../tasks.js";
-import type * as daily from "../daily.js";
 
 import type {
   ApiFromModules,

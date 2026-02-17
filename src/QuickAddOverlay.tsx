@@ -3,7 +3,9 @@ import { useMutation } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import type React from 'react'
 import { Button, Card, Flex, SegmentedControl, Text, Theme } from '@radix-ui/themes'
-import { PlusIcon } from '@radix-ui/react-icons'
+import SmartTaskInput from './components/tasks/SmartTaskInput'
+import { parseDateAlias, stripAlias } from './lib/dateAliases'
+import { Plus } from 'lucide-react'
 
 type QuickAddMode = 'task' | 'idea'
 
@@ -12,17 +14,21 @@ function QuickAddOverlay() {
   const createIdea = useMutation(api.ideas.createIdea)
   const [mode, setMode] = useState<QuickAddMode>('task')
   const [title, setTitle] = useState('')
+  const [resolvedDate, setResolvedDate] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const ideaInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function focusInput() {
       setMode('task')
       setTitle('')
+      setResolvedDate(null)
       setSubmitError('')
       requestAnimationFrame(() => {
         inputRef.current?.focus()
+        ideaInputRef.current?.focus()
       })
     }
 
@@ -55,9 +61,11 @@ function QuickAddOverlay() {
     try {
       setIsSubmitting(true)
       if (mode === 'task') {
+        const alias = parseDateAlias(trimmedTitle)
+        const cleanTitle = alias ? stripAlias(trimmedTitle, alias) : trimmedTitle
         await createTask({
-          title: trimmedTitle,
-          dueDate: null,
+          title: cleanTitle,
+          dueDate: resolvedDate,
         })
       } else {
         await createIdea({
@@ -65,6 +73,7 @@ function QuickAddOverlay() {
         })
       }
       setTitle('')
+      setResolvedDate(null)
       window.ipcRenderer?.send?.('quick-add:close')
     } catch {
       setSubmitError(`Could not create ${mode} right now.`)
@@ -73,17 +82,15 @@ function QuickAddOverlay() {
     }
   }
 
-  function handleInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  function handleIdeaKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Tab') {
       event.preventDefault()
       setMode((current) => (current === 'task' ? 'idea' : 'task'))
     }
   }
 
-  const placeholder = mode === 'task' ? 'Add task...' : 'Capture idea...'
-
   return (
-    <Theme appearance="light" accentColor="blue" grayColor="slate" radius="large">
+    <Theme appearance="light" accentColor="indigo" grayColor="slate" radius="medium">
       <div
         style={{
           height: '100vh',
@@ -107,25 +114,36 @@ function QuickAddOverlay() {
                   Tab toggles mode
                 </Text>
               </Flex>
-              <Flex align="center" gap="2">
-                <PlusIcon />
-                <input
-                  ref={inputRef}
+              {mode === 'task' ? (
+                <SmartTaskInput
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder={placeholder}
-                  style={{
-                    width: '100%',
-                    border: '1px solid var(--gray-a6)',
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    background: 'var(--color-surface)',
-                    color: 'var(--gray-12)',
-                    fontSize: 15,
-                  }}
+                  onChange={setTitle}
+                  resolvedDate={resolvedDate}
+                  onResolvedDate={setResolvedDate}
+                  placeholder="Add task... (try TD, TM, MON-SUN)"
+                  inputRef={inputRef}
                 />
-              </Flex>
+              ) : (
+                <Flex align="center" gap="2">
+                  <Plus size={15} />
+                  <input
+                    ref={ideaInputRef}
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    onKeyDown={handleIdeaKeyDown}
+                    placeholder="Capture idea..."
+                    style={{
+                      width: '100%',
+                      border: '1px solid var(--gray-a6)',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      background: 'var(--color-surface)',
+                      color: 'var(--gray-12)',
+                      fontSize: 15,
+                    }}
+                  />
+                </Flex>
+              )}
               <Flex align="center" justify="between">
                 <Text size="1" color="gray">
                   Esc closes quick add
