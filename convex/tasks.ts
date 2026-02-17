@@ -1,6 +1,72 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+const ISO_DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function toLocalDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setHours(12, 0, 0, 0);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function normalizeDueDate(input: string | null | undefined): string | null {
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (ISO_DATE_KEY_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("Due date must be a valid date.");
+  }
+  return toLocalDateKey(parsed);
+}
+
+function dateKeyFromIso(isoString: string | undefined): string | null {
+  if (!isoString) {
+    return null;
+  }
+
+  const parsed = new Date(isoString);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return toLocalDateKey(parsed);
+}
+
+function getHorizonDateKeys() {
+  const now = new Date();
+  return {
+    todayKey: toLocalDateKey(now),
+    tomorrowKey: toLocalDateKey(addDays(now, 1)),
+    dayAfterKey: toLocalDateKey(addDays(now, 2)),
+    yesterdayKey: toLocalDateKey(addDays(now, -1)),
+  };
+}
+
+function compareByCreatedAtDesc(
+  a: { createdAt: string },
+  b: { createdAt: string },
+): number {
+  return b.createdAt.localeCompare(a.createdAt);
+}
+
 export const createTask = mutation({
   args: {
     title: v.string(),
@@ -13,29 +79,180 @@ export const createTask = mutation({
     }
 
     const now = new Date().toISOString();
-    const dueDate = args.dueDate ?? null;
+    const dueDate = normalizeDueDate(args.dueDate ?? null);
 
     return await ctx.db.insert("tasks", {
       title,
       dueDate,
-      status: "pending",
+      status: "active",
       createdAt: now,
+      updatedAt: now,
     });
   },
 });
 
-export const listPendingTasks = query({
+export const updateTask = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    title: v.optional(v.string()),
+    dueDate: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new Error("Task not found.");
+    }
+
+    const patch: {
+      title?: string;
+      dueDate?: string | null;
+      updatedAt: string;
+    } = { updatedAt: new Date().toISOString() };
+
+    if (args.title !== undefined) {
+      const title = args.title.trim();
+      if (!title) {
+        throw new Error("Task title is required.");
+      }
+      patch.title = title;
+    }
+
+    if (args.dueDate !== undefined) {
+      patch.dueDate = normalizeDueDate(args.dueDate);
+    }
+
+    await ctx.db.patch(args.taskId, patch);
+  },
+});
+
+export const listActiveTasks = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db
       .query("tasks")
-      .withIndex("by_status_createdAt", (q) => q.eq("status", "pending"))
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "active"))
       .order("desc")
       .collect();
   },
 });
 
-export const completeTask = mutation({
+export const listUnscheduledTasks = query({
+  args: {},
+  handler: async (ctx) => {
+    const activeTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "active"))
+      .order("desc")
+      .collect();
+
+    return activeTasks.filter((task) => task.dueDate === null);
+  },
+});
+
+export const listHorizonTasks = query({
+  args: {},
+  handler: async (ctx) => {
+    const { todayKey, tomorrowKey, dayAfterKey } = getHorizonDateKeys();
+    const activeTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "active"))
+      .order("desc")
+      .collect();
+
+    const todayTasks: typeof activeTasks = [];
+    const tomorrowTasks: typeof activeTasks = [];
+    const dayAfterTasks: typeof activeTasks = [];
+
+    for (const task of activeTasks) {
+      if (task.dueDate === todayKey) {
+        todayTasks.push(task);
+      } else if (task.dueDate === tomorrowKey) {
+        tomorrowTasks.push(task);
+      } else if (task.dueDate === dayAfterKey) {
+        dayAfterTasks.push(task);
+      }
+    }
+
+    return {
+      todayKey,
+      tomorrowKey,
+      dayAfterKey,
+      todayTasks,
+      tomorrowTasks,
+      dayAfterTasks,
+    };
+  },
+});
+
+export const getPlannerSnapshot = query({
+  args: {},
+  handler: async (ctx) => {
+    const { todayKey, tomorrowKey, dayAfterKey, yesterdayKey } =
+      getHorizonDateKeys();
+
+    const activeTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "active"))
+      .order("desc")
+      .collect();
+
+    const doneTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_updatedAt", (q) => q.eq("status", "done"))
+      .order("desc")
+      .collect();
+
+    const todayTasks: typeof activeTasks = [];
+    const tomorrowTasks: typeof activeTasks = [];
+    const dayAfterTasks: typeof activeTasks = [];
+    const unscheduledTasks: typeof activeTasks = [];
+    const laterTasks: typeof activeTasks = [];
+    const priorTasks: typeof activeTasks = [];
+
+    for (const task of activeTasks) {
+      const dueDate = task.dueDate;
+      if (dueDate === null) {
+        unscheduledTasks.push(task);
+      } else if (dueDate === todayKey) {
+        todayTasks.push(task);
+      } else if (dueDate === tomorrowKey) {
+        tomorrowTasks.push(task);
+      } else if (dueDate === dayAfterKey) {
+        dayAfterTasks.push(task);
+      } else if (dueDate < todayKey) {
+        priorTasks.push(task);
+      } else {
+        laterTasks.push(task);
+      }
+    }
+
+    unscheduledTasks.sort(compareByCreatedAtDesc);
+    priorTasks.sort(compareByCreatedAtDesc);
+    laterTasks.sort(compareByCreatedAtDesc);
+
+    const yesterdayCompletedCount = doneTasks.reduce((count, task) => {
+      const completedDateKey = dateKeyFromIso(task.completedAt);
+      return completedDateKey === yesterdayKey ? count + 1 : count;
+    }, 0);
+
+    return {
+      todayKey,
+      tomorrowKey,
+      dayAfterKey,
+      yesterdayKey,
+      todayTasks,
+      tomorrowTasks,
+      dayAfterTasks,
+      unscheduledTasks,
+      laterTasks,
+      priorTasks,
+      activeTasks,
+      yesterdayCompletedCount,
+    };
+  },
+});
+
+export const markTaskDone = mutation({
   args: {
     taskId: v.id("tasks"),
   },
@@ -45,11 +262,41 @@ export const completeTask = mutation({
       throw new Error("Task not found.");
     }
 
-    await ctx.db.patch(args.taskId, { status: "done" });
+    if (task.status === "done") {
+      return;
+    }
+
+    await ctx.db.patch(args.taskId, {
+      status: "done",
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
   },
 });
 
-export const updateTaskDueDate = mutation({
+export const dropTask = mutation({
+  args: {
+    taskId: v.id("tasks"),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new Error("Task not found.");
+    }
+
+    if (task.status === "dropped") {
+      return;
+    }
+
+    await ctx.db.patch(args.taskId, {
+      status: "dropped",
+      droppedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+export const setTaskDueDate = mutation({
   args: {
     taskId: v.id("tasks"),
     dueDate: v.union(v.string(), v.null()),
@@ -60,6 +307,9 @@ export const updateTaskDueDate = mutation({
       throw new Error("Task not found.");
     }
 
-    await ctx.db.patch(args.taskId, { dueDate: args.dueDate });
+    await ctx.db.patch(args.taskId, {
+      dueDate: normalizeDueDate(args.dueDate),
+      updatedAt: new Date().toISOString(),
+    });
   },
 });

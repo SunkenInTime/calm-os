@@ -21,6 +21,6 @@ body,
 }
 
 body {
-  background-color: rgb(10 10 10);
-  color: rgb(229 229 229);
+  background-color: hsl(210deg 20% 98%);
+  color: hsl(216deg 20% 16%);
 }

@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import type React from 'react'
+import { Button, Card, Flex, SegmentedControl, Text, Theme } from '@radix-ui/themes'
+import { PlusIcon } from '@radix-ui/react-icons'
 
 type QuickAddMode = 'task' | 'idea'
 
@@ -79,37 +81,69 @@ function QuickAddOverlay() {
   }
 
   const placeholder = mode === 'task' ? 'Add task...' : 'Capture idea...'
-  const modeLabel = mode === 'task' ? 'Task' : 'Idea'
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-neutral-950/95 p-3">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full rounded-2xl border border-neutral-700/80 bg-neutral-900 p-3 shadow-2xl"
+    <Theme appearance="light" accentColor="blue" grayColor="slate" radius="large">
+      <div
+        style={{
+          height: '100vh',
+          width: '100vw',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          background: 'rgba(238, 243, 248, 0.92)',
+          padding: 12,
+        }}
       >
-        <div className="flex items-center gap-2">
-          <span className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-300">
-            {modeLabel}
-          </span>
-          <input
-            ref={inputRef}
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={placeholder}
-            className="w-full rounded-xl border border-neutral-800 bg-neutral-800 px-4 py-3 text-base text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-600 focus:outline-none"
-          />
-        </div>
-        <div className="mt-2 flex items-center justify-between px-1 text-xs text-neutral-500">
-          <span>Tab to toggle Task/Idea</span>
-          <span>Esc to close</span>
-        </div>
-        {submitError && <p className="mt-2 px-1 text-sm text-neutral-400">{submitError}</p>}
-        <button type="submit" disabled={isSubmitting} className="hidden">
-          Add
-        </button>
-      </form>
-    </div>
+        <Card style={{ width: '100%' }}>
+          <form onSubmit={handleSubmit}>
+            <Flex direction="column" gap="3">
+              <Flex align="center" justify="between">
+                <SegmentedControl.Root value={mode} onValueChange={(value) => setMode(value as QuickAddMode)}>
+                  <SegmentedControl.Item value="task">Task</SegmentedControl.Item>
+                  <SegmentedControl.Item value="idea">Idea</SegmentedControl.Item>
+                </SegmentedControl.Root>
+                <Text size="1" color="gray">
+                  Tab toggles mode
+                </Text>
+              </Flex>
+              <Flex align="center" gap="2">
+                <PlusIcon />
+                <input
+                  ref={inputRef}
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  onKeyDown={handleInputKeyDown}
+                  placeholder={placeholder}
+                  style={{
+                    width: '100%',
+                    border: '1px solid var(--gray-a6)',
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    background: 'var(--color-surface)',
+                    color: 'var(--gray-12)',
+                    fontSize: 15,
+                  }}
+                />
+              </Flex>
+              <Flex align="center" justify="between">
+                <Text size="1" color="gray">
+                  Esc closes quick add
+                </Text>
+                <Button type="submit" size="1" disabled={isSubmitting}>
+                  {isSubmitting ? 'Adding...' : 'Add'}
+                </Button>
+              </Flex>
+              {submitError && (
+                <Text size="1" color="gray">
+                  {submitError}
+                </Text>
+              )}
+            </Flex>
+          </form>
+        </Card>
+      </div>
+    </Theme>
   )
 }
 

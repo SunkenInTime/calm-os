@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConvexProvider, ConvexReactClient } from 'convex/react'
+import '@radix-ui/themes/styles.css'
 import App from './App.tsx'
 import QuickAddOverlay from './QuickAddOverlay.tsx'
 import './index.css'
