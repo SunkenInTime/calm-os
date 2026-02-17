@@ -313,12 +313,12 @@ function DashboardPage() {
   const reentryStatus = useQuery(api.daily.getReentryStatus)
   const createTask = useMutation(api.tasks.createTask)
   const markTaskDone = useMutation(api.tasks.markTaskDone)
-  const setTaskDueDate = useMutation(api.tasks.setTaskDueDate)
+  const updateTaskDueDate = useMutation(api.tasks.setTaskDueDate)
   const addCommitment = useMutation(api.daily.addCommitmentForDate)
   const removeCommitment = useMutation(api.daily.removeCommitmentForDate)
 
   const [taskTitle, setTaskTitle] = useState('')
-  const [taskDueDate, setTaskDueDate] = useState('')
+  const [taskDueDateValue, setTaskDueDateValue] = useState('')
   const [composerError, setComposerError] = useState('')
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [selectedCommitmentCandidate, setSelectedCommitmentCandidate] = useState('')
@@ -330,6 +330,7 @@ function DashboardPage() {
       </Card>
     )
   }
+  const todayKey = dailyModel.todayKey
 
   const commitmentTasks = dailyModel.commitmentTasks.filter((task) => task.status === 'active')
   const completedCommitmentCount = dailyModel.commitmentTasks.filter(
@@ -355,9 +356,9 @@ function DashboardPage() {
 
     try {
       setIsCreatingTask(true)
-      await createTask({ title, dueDate: taskDueDate || null })
+      await createTask({ title, dueDate: taskDueDateValue || null })
       setTaskTitle('')
-      setTaskDueDate('')
+      setTaskDueDateValue('')
     } catch {
       setComposerError('Could not add that task right now.')
     } finally {
@@ -367,9 +368,9 @@ function DashboardPage() {
 
   async function handleToggleCommitment(taskId: Id<'tasks'>, isCommitted: boolean) {
     if (isCommitted) {
-      await removeCommitment({ dateKey: dailyModel.todayKey, taskId })
+      await removeCommitment({ dateKey: todayKey, taskId })
     } else {
-      await addCommitment({ dateKey: dailyModel.todayKey, taskId })
+      await addCommitment({ dateKey: todayKey, taskId })
     }
   }
 
@@ -378,7 +379,7 @@ function DashboardPage() {
   }
 
   async function handleSetDueDate(taskId: Id<'tasks'>, dueDate: string | null) {
-    await setTaskDueDate({ taskId, dueDate })
+    await updateTaskDueDate({ taskId, dueDate })
   }
 
   return (
@@ -428,7 +429,7 @@ function DashboardPage() {
       <Card>
         <form onSubmit={handleTaskCreate}>
           <Flex direction={{ initial: 'column', sm: 'row' }} align="end" gap="3">
-            <Box grow="1">
+            <Box style={{ flexGrow: 1 }}>
               <Text as="label" size="1" color="gray">
                 New task
               </Text>
@@ -448,8 +449,8 @@ function DashboardPage() {
               </Text>
               <input
                 type="date"
-                value={taskDueDate}
-                onChange={(event) => setTaskDueDate(event.target.value)}
+                value={taskDueDateValue}
+                onChange={(event) => setTaskDueDateValue(event.target.value)}
                 style={{
                   border: '1px solid var(--gray-a6)',
                   borderRadius: 8,
@@ -473,7 +474,7 @@ function DashboardPage() {
       </Card>
 
       <Flex direction={{ initial: 'column', lg: 'row' }} align="start" gap="4">
-        <Box grow="1" width="100%">
+        <Box width="100%" style={{ flexGrow: 1 }}>
           <Card>
             <Flex direction="column" gap="4">
               <Box>
@@ -517,7 +518,7 @@ function DashboardPage() {
                     onClick={async () => {
                       if (!selectedCommitmentCandidate) return
                       await addCommitment({
-                        dateKey: dailyModel.todayKey,
+                        dateKey: todayKey,
                         taskId: selectedCommitmentCandidate as Id<'tasks'>,
                       })
                       setSelectedCommitmentCandidate('')
@@ -691,7 +692,7 @@ function IdeasPage() {
         </Text>
         <form onSubmit={handleCreateIdea}>
           <Flex direction={{ initial: 'column', sm: 'row' }} align="end" gap="2" mt="3">
-            <Box grow="1">
+            <Box style={{ flexGrow: 1 }}>
               <Text as="label" size="1" color="gray">
                 New idea
               </Text>
@@ -901,7 +902,7 @@ function RitualVariantFrame({
         <Box width={{ initial: '100%', lg: '34%' }}>
           <Card>{summary}</Card>
         </Box>
-        <Box grow="1">
+        <Box style={{ flexGrow: 1 }}>
           <Flex direction="column" gap="4">
             <Card>{primary}</Card>
             <Card>{secondary}</Card>
@@ -967,6 +968,7 @@ function RitualPage({ kind }: { kind: RitualKind }) {
   const [quickAddDueDate, setQuickAddDueDate] = useState('')
   const [ritualError, setRitualError] = useState('')
   const [isFinishing, setIsFinishing] = useState(false)
+  const [hasCompletedRitual, setHasCompletedRitual] = useState(false)
   const [moveDateByTaskId, setMoveDateByTaskId] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -992,6 +994,18 @@ function RitualPage({ kind }: { kind: RitualKind }) {
     setMoveDateByTaskId(defaults)
   }, [dailyModel, initializedDateKey, planner])
 
+  useEffect(() => {
+    return () => {
+      if (!dailyModel || hasCompletedRitual) {
+        return
+      }
+      void markRitualCompleted({
+        dateKey: dailyModel.todayKey,
+        ritual: kind,
+      })
+    }
+  }, [dailyModel, hasCompletedRitual, kind, markRitualCompleted])
+
   if (!planner || !dailyModel) {
     return (
       <Card>
@@ -999,6 +1013,7 @@ function RitualPage({ kind }: { kind: RitualKind }) {
       </Card>
     )
   }
+  const ritualDateKey = dailyModel.todayKey
 
   const commitmentTasks = dailyModel.commitmentTasks
   const commitmentTaskIds = new Set((dailyModel.daily?.commitmentTaskIds ?? []).map((id) => id))
@@ -1068,14 +1083,15 @@ function RitualPage({ kind }: { kind: RitualKind }) {
       setIsFinishing(true)
       if (kind !== 'evening') {
         await setCommitmentsForDate({
-          dateKey: dailyModel.todayKey,
+          dateKey: ritualDateKey,
           taskIds: selectedCommitmentTaskIds,
         })
       }
       await markRitualCompleted({
-        dateKey: dailyModel.todayKey,
+        dateKey: ritualDateKey,
         ritual: kind,
       })
+      setHasCompletedRitual(true)
       navigate('/')
     } catch {
       setRitualError('Could not save this ritual yet. Please try again.')
