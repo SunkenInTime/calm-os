@@ -1,7 +1,6 @@
 import { FormEvent, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
-import { Badge, Box, Button, Card, Flex, Heading, IconButton, Text, TextField } from '@radix-ui/themes'
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import type { IdeaDoc } from '../lib/domain'
 
@@ -37,99 +36,105 @@ function IdeasPage() {
 
   if (!ideas) {
     return (
-      <Card>
-        <Text color="gray">Loading ideas...</Text>
-      </Card>
+      <div className="flex h-full items-center justify-center text-slate-400">
+        Loading ideas...
+      </div>
     )
   }
 
   return (
-    <Flex direction="column" gap="4">
-      <Card>
-        <Heading size="5">Ideas</Heading>
-        <Text color="gray" as="p" mt="1">
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Add idea form */}
+      <div className="mb-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-medium text-slate-600">Capture an idea</h2>
+        <p className="mt-0.5 text-xs text-slate-400">
           Ideas are optional, incubating thoughts. Keep them light.
-        </Text>
-        <form onSubmit={handleCreateIdea}>
-          <Flex direction={{ initial: 'column', sm: 'row' }} align="end" gap="2" mt="3">
-            <Box style={{ flexGrow: 1 }}>
-              <Text as="label" size="1" color="gray">
-                New idea
-              </Text>
-              <TextField.Root
-                value={ideaTitle}
-                onChange={(event) => setIdeaTitle(event.target.value)}
-                placeholder="Capture an idea..."
-              >
-                <TextField.Slot>
-                  <Plus size={15} />
-                </TextField.Slot>
-              </TextField.Root>
-            </Box>
-            <Button type="submit" loading={isSubmitting}>
-              Add idea
-            </Button>
-          </Flex>
+        </p>
+        <form onSubmit={handleCreateIdea} className="mt-3 flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
+              <Plus size={13} className="text-slate-400" />
+            </div>
+            <input
+              value={ideaTitle}
+              onChange={(e) => setIdeaTitle(e.target.value)}
+              placeholder="What's on your mind..."
+              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Plus size={14} />
+            {isSubmitting ? 'Adding...' : 'Add idea'}
+          </button>
         </form>
         {ideaError && (
-          <Text size="1" color="gray" mt="2">
-            {ideaError}
-          </Text>
+          <p className="mt-2 text-xs text-slate-400">{ideaError}</p>
         )}
-      </Card>
-      <Card>
-        <Flex align="center" justify="between" mb="3">
-          <Heading size="4">Ranked list</Heading>
-          <Badge color="indigo">{ideas.length}</Badge>
-        </Flex>
-        {ideas.length === 0 ? (
-          <Text size="2" color="gray">
-            No ideas yet.
-          </Text>
-        ) : (
-          <Flex direction="column" gap="2">
-            {ideas.map((idea, index) => (
-              <Card key={idea._id} variant="surface">
-                <Flex align="start" justify="between" gap="3">
-                  <Flex gap="2" align="start">
-                    <Badge color="gray">#{index + 1}</Badge>
-                    <Text>{idea.title}</Text>
-                  </Flex>
-                  <Flex gap="1">
-                    <IconButton
-                      size="1"
-                      variant="ghost"
-                      aria-label={`Move ${idea.title} up`}
+      </div>
+
+      {/* Ideas list */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3">
+          <h3 className="text-sm font-medium text-slate-600">Ranked list</h3>
+          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs tabular-nums text-indigo-600">
+            {ideas.length}
+          </span>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+          {ideas.length === 0 ? (
+            <p className="p-2 text-sm text-slate-400">No ideas yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {ideas.map((idea, index) => (
+                <article
+                  key={idea._id}
+                  className="group flex items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5"
+                >
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span className="mt-0.5 shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
+                      #{index + 1}
+                    </span>
+                    <span className="text-sm text-slate-700">{idea.title}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
                       disabled={index === 0}
                       onClick={() => void moveIdea({ ideaId: idea._id, direction: 'up' })}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                      aria-label="Move up"
                     >
-                      <ArrowUp size={15} />
-                    </IconButton>
-                    <IconButton
-                      size="1"
-                      variant="ghost"
-                      aria-label={`Move ${idea.title} down`}
+                      <ChevronUp size={13} />
+                    </button>
+                    <button
+                      type="button"
                       disabled={index === ideas.length - 1}
                       onClick={() => void moveIdea({ ideaId: idea._id, direction: 'down' })}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                      aria-label="Move down"
                     >
-                      <ArrowDown size={15} />
-                    </IconButton>
-                    <IconButton
-                      size="1"
-                      variant="ghost"
-                      aria-label={`Archive ${idea.title}`}
+                      <ChevronDown size={13} />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void archiveIdea({ ideaId: idea._id })}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+                      aria-label="Archive"
                     >
-                      <Trash2 size={15} />
-                    </IconButton>
-                  </Flex>
-                </Flex>
-              </Card>
-            ))}
-          </Flex>
-        )}
-      </Card>
-    </Flex>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

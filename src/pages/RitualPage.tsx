@@ -81,8 +81,8 @@ function RitualPage({ kind }: RitualPageProps) {
 
   if (!planner || !dailyModel) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <p className="text-sm text-slate-400">Loading ritual...</p>
+      <div className="flex h-full items-center justify-center text-slate-400">
+        Loading ritual...
       </div>
     )
   }
@@ -400,17 +400,19 @@ function RitualPage({ kind }: RitualPageProps) {
     )
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-800">{ritualCopy.title}</h1>
-        <p className="mt-0.5 text-sm text-slate-500">{ritualCopy.subtitle}</p>
+    <div className="h-full overflow-y-auto">
+      <div className="space-y-4 pb-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h1 className="text-xl font-semibold text-slate-800">{ritualCopy.title}</h1>
+          <p className="mt-0.5 text-sm text-slate-500">{ritualCopy.subtitle}</p>
+        </div>
+        <RitualVariantFrame
+          summary={summaryNode}
+          primary={primaryNode}
+          secondary={secondaryNode}
+          footer={footerNode}
+        />
       </div>
-      <RitualVariantFrame
-        summary={summaryNode}
-        primary={primaryNode}
-        secondary={secondaryNode}
-        footer={footerNode}
-      />
     </div>
   )
 }
