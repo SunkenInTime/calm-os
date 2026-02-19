@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import { getRelativeDueLabel, toLocalDateKey } from '../lib/date'
 import type { DailyModel, PlannerSnapshot, TaskDoc, TaskId } from '../lib/domain'
+import type { FocusStartPayload } from '../lib/focusBlockSession'
 import TaskCard from '../components/tasks/TaskCard'
 import { useDragAndDrop, type ColumnKey } from '../lib/useDragAndDrop'
 
@@ -22,6 +23,8 @@ function DashboardPage() {
 
   const [tomorrowOpen, setTomorrowOpen] = useState(false)
   const [dayAfterOpen, setDayAfterOpen] = useState(false)
+  const [focusTarget, setFocusTarget] = useState<{ taskId: TaskId; title: string } | null>(null)
+  const [isStartingFocusBlock, setIsStartingFocusBlock] = useState(false)
 
   const todayKey = dailyModel?.todayKey ?? ''
 
@@ -91,6 +94,30 @@ function DashboardPage() {
     }
   }
 
+  function handleRequestStartFocus(task: TaskDoc) {
+    if (!commitmentTaskIds.has(task._id)) return
+    setFocusTarget({
+      taskId: task._id,
+      title: task.title,
+    })
+  }
+
+  async function handleConfirmStartFocusBlock() {
+    if (!focusTarget || isStartingFocusBlock) return
+    setIsStartingFocusBlock(true)
+    try {
+      const payload: FocusStartPayload = {
+        source: 'commitment-card',
+        commitmentId: focusTarget.taskId,
+        commitmentTitle: focusTarget.title,
+      }
+      await window.ipcRenderer?.invoke?.('focus:start', payload)
+      setFocusTarget(null)
+    } finally {
+      setIsStartingFocusBlock(false)
+    }
+  }
+
   function dueLabelFor(task: TaskDoc) {
     return getRelativeDueLabel(task.dueDate, planner!.todayKey)
   }
@@ -131,6 +158,7 @@ function DashboardPage() {
                     showFocusButton
                     onMarkDone={handleMarkDone}
                     onToggleFocus={handleToggleFocus}
+                    onStartFocusBlock={handleRequestStartFocus}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                   />
@@ -165,6 +193,7 @@ function DashboardPage() {
                   showFocusButton
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
+                  onStartFocusBlock={handleRequestStartFocus}
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 />
@@ -204,6 +233,7 @@ function DashboardPage() {
                   isCommitment={commitmentTaskIds.has(task._id)}
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
+                  onStartFocusBlock={handleRequestStartFocus}
                 />
               ))}
             </div>
@@ -225,6 +255,7 @@ function DashboardPage() {
                   isCommitment={commitmentTaskIds.has(task._id)}
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
+                  onStartFocusBlock={handleRequestStartFocus}
                 />
               ))}
             </div>
@@ -240,7 +271,38 @@ function DashboardPage() {
             todayKey={planner.todayKey}
             onMarkDone={handleMarkDone}
             onToggleFocus={handleToggleFocus}
+            onStartFocusBlock={handleRequestStartFocus}
           />
+        )}
+        {focusTarget && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+              <h3 className="text-sm font-semibold text-slate-800">Start focus block?</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Attach a 25-minute focus block to:
+              </p>
+              <p className="mt-2 rounded-md bg-indigo-50 px-2.5 py-2 text-sm font-medium text-indigo-700">
+                {focusTarget.title}
+              </p>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFocusTarget(null)}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmStartFocusBlock()}
+                  disabled={isStartingFocusBlock}
+                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  {isStartingFocusBlock ? 'Starting...' : 'Start'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -280,6 +342,7 @@ function UnscheduledLink({
   todayKey,
   onMarkDone,
   onToggleFocus,
+  onStartFocusBlock,
 }: {
   count: number
   tasks: TaskDoc[]
@@ -287,6 +350,7 @@ function UnscheduledLink({
   todayKey: string
   onMarkDone: (taskId: TaskId) => Promise<void>
   onToggleFocus: (taskId: TaskId) => void
+  onStartFocusBlock: (task: TaskDoc) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -313,6 +377,7 @@ function UnscheduledLink({
                 showFocusButton
                 onMarkDone={onMarkDone}
                 onToggleFocus={onToggleFocus}
+                onStartFocusBlock={onStartFocusBlock}
               />
             ))}
           </div>

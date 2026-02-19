@@ -25,8 +25,34 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 let quickAddWindow: BrowserWindow | null = null
+let focusWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+let focusInterval: NodeJS.Timeout | null = null
+
+const FOCUS_BLOCK_DURATION_MS = 25 * 60 * 1000
+
+type FocusStatus = 'idle' | 'running' | 'complete'
+
+type FocusSessionState = {
+  status: FocusStatus
+  commitmentId: string | null
+  commitmentTitle: string | null
+  startedAt: number | null
+  endsAt: number | null
+}
+
+function createIdleFocusSession(): FocusSessionState {
+  return {
+    status: 'idle',
+    commitmentId: null,
+    commitmentTitle: null,
+    startedAt: null,
+    endsAt: null,
+  }
+}
+
+let focusSession: FocusSessionState = createIdleFocusSession()
 
 app.setName('Calm OS')
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
@@ -158,6 +184,16 @@ function getQuickAddUrl() {
   return null
 }
 
+function getFocusBlockUrl() {
+  if (VITE_DEV_SERVER_URL) {
+    const focusUrl = new URL(VITE_DEV_SERVER_URL)
+    focusUrl.searchParams.set('mode', 'focus-block')
+    return focusUrl.toString()
+  }
+
+  return null
+}
+
 function createQuickAddWindow() {
   if (quickAddWindow && !quickAddWindow.isDestroyed()) {
     return quickAddWindow
@@ -201,6 +237,58 @@ function createQuickAddWindow() {
   return quickAddWindow
 }
 
+function createFocusWindow() {
+  if (focusWindow && !focusWindow.isDestroyed()) {
+    return focusWindow
+  }
+
+  focusWindow = new BrowserWindow({
+    width: 360,
+    height: 64,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    transparent: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.mjs'),
+    },
+  })
+
+  focusWindow.on('closed', () => {
+    focusWindow = null
+  })
+
+  const focusUrl = getFocusBlockUrl()
+  if (focusUrl) {
+    focusWindow.loadURL(focusUrl)
+  } else {
+    focusWindow.loadFile(path.join(RENDERER_DIST, 'index.html'), {
+      query: { mode: 'focus-block' },
+    })
+  }
+
+  return focusWindow
+}
+
+function showFocusWindow() {
+  const window = createFocusWindow()
+  const windowWidth = 360
+  const windowHeight = 64
+  const cursorPoint = screen.getCursorScreenPoint()
+  const { workArea } = screen.getDisplayNearestPoint(cursorPoint)
+  const x = Math.round(workArea.x + workArea.width - windowWidth - 24)
+  const y = Math.round(workArea.y + workArea.height - windowHeight - 24)
+
+  window.setPosition(x, y)
+  window.showInactive()
+}
+
 function showQuickAddWindow() {
   const window = createQuickAddWindow()
   const windowWidth = 980
@@ -213,6 +301,68 @@ function showQuickAddWindow() {
   window.setPosition(x, y)
   window.show()
   window.focus()
+}
+
+function emitFocusState() {
+  win?.webContents.send('focus:state', focusSession)
+  focusWindow?.webContents.send('focus:state', focusSession)
+}
+
+function stopFocusInterval() {
+  if (focusInterval) {
+    clearInterval(focusInterval)
+    focusInterval = null
+  }
+}
+
+function runFocusInterval() {
+  stopFocusInterval()
+  focusInterval = setInterval(() => {
+    if (focusSession.status !== 'running' || !focusSession.endsAt) {
+      return
+    }
+    if (Date.now() >= focusSession.endsAt) {
+      focusSession = {
+        ...focusSession,
+        status: 'complete',
+        endsAt: Date.now(),
+      }
+      stopFocusInterval()
+      showFocusWindow()
+      emitFocusState()
+      return
+    }
+    emitFocusState()
+  }, 1000)
+}
+
+function startFocusSession(commitmentId: string, commitmentTitle: string) {
+  const now = Date.now()
+  focusSession = {
+    status: 'running',
+    commitmentId,
+    commitmentTitle,
+    startedAt: now,
+    endsAt: now + FOCUS_BLOCK_DURATION_MS,
+  }
+  showFocusWindow()
+  runFocusInterval()
+  emitFocusState()
+}
+
+function stopFocusSession() {
+  stopFocusInterval()
+  focusSession = createIdleFocusSession()
+  focusWindow?.hide()
+  emitFocusState()
+}
+
+function continueFocusSession() {
+  if (!focusSession.commitmentId || !focusSession.commitmentTitle) {
+    return false
+  }
+  startFocusSession(focusSession.commitmentId, focusSession.commitmentTitle)
+  return true
 }
 
 function registerGlobalShortcuts() {
@@ -252,6 +402,7 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  stopFocusInterval()
   tray?.destroy()
   tray = null
 })
@@ -262,6 +413,46 @@ ipcMain.on('quick-add:close', () => {
 
 ipcMain.handle('quick-add:read-clipboard-text', () => {
   return clipboard.readText()
+})
+
+ipcMain.handle(
+  'focus:start',
+  (
+    _event,
+    payload: { source?: string; commitmentId?: string; commitmentTitle?: string } | null,
+  ) => {
+    if (!payload || payload.source !== 'commitment-card') {
+      return { ok: false }
+    }
+
+    const commitmentId = typeof payload.commitmentId === 'string' ? payload.commitmentId.trim() : ''
+    const commitmentTitle =
+      typeof payload.commitmentTitle === 'string' ? payload.commitmentTitle.trim() : ''
+
+    if (!commitmentId || !commitmentTitle) {
+      return { ok: false }
+    }
+
+    startFocusSession(commitmentId, commitmentTitle)
+    return { ok: true }
+  },
+)
+
+ipcMain.handle('focus:get-state', () => focusSession)
+
+ipcMain.handle('focus:stop', () => {
+  stopFocusSession()
+  return { ok: true }
+})
+
+ipcMain.handle('focus:continue', () => {
+  const ok = continueFocusSession()
+  return { ok }
+})
+
+ipcMain.handle('focus:close-complete', () => {
+  stopFocusSession()
+  return { ok: true }
 })
 
 ipcMain.handle('shell:open-external-url', async (_event, rawUrl: string) => {
@@ -287,6 +478,7 @@ app.whenReady().then(() => {
   createTray()
   createWindow()
   createQuickAddWindow()
+  createFocusWindow()
   registerGlobalShortcuts()
 
   try {

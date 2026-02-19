@@ -14,6 +14,7 @@ type TaskCardProps = {
   showFocusButton?: boolean
   onMarkDone: (taskId: TaskId) => Promise<void>
   onToggleFocus?: (taskId: TaskId) => void
+  onStartFocusBlock?: (task: TaskDoc) => void
   onDragStart?: (event: DragEvent, taskId: TaskId, sourceColumn: ColumnKey) => void
   onDragEnd?: () => void
 }
@@ -27,6 +28,7 @@ function TaskCard({
   showFocusButton = false,
   onMarkDone,
   onToggleFocus,
+  onStartFocusBlock,
   onDragStart,
   onDragEnd,
 }: TaskCardProps) {
@@ -66,6 +68,15 @@ function TaskCard({
           <Star size={9} className="fill-indigo-500 text-indigo-500" />
           Focus today
         </span>
+      )}
+      {isCommitment && onStartFocusBlock && (
+        <button
+          type="button"
+          onClick={() => onStartFocusBlock(task)}
+          className="shrink-0 rounded-md border border-indigo-200/80 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          Start focus block
+        </button>
       )}
       {dueLabel && <DueBadge label={dueLabel} />}
       {showFocusButton && onToggleFocus && (
