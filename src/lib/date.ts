@@ -29,3 +29,18 @@ export function formatDueDate(dueDate: string | null): string {
   if (!dueDate) return 'Unscheduled'
   return parseDateKey(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
+
+export type DueLabel = 'Overdue' | 'Due today' | 'Due tomorrow' | 'Due in 2 days' | 'No date'
+
+export function getRelativeDueLabel(dueDate: string | null, todayKey: string): DueLabel {
+  if (!dueDate) return 'No date'
+  const todayDate = parseDateKey(todayKey)
+  const taskDate = parseDateKey(dueDate)
+  const diffMs = taskDate.getTime() - todayDate.getTime()
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return 'Overdue'
+  if (diffDays === 0) return 'Due today'
+  if (diffDays === 1) return 'Due tomorrow'
+  if (diffDays === 2) return 'Due in 2 days'
+  return 'No date'
+}

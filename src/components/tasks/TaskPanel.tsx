@@ -11,9 +11,9 @@ type TaskPanelProps = {
   compact?: boolean
   isDropActive: boolean
   className?: string
-  showCommitButton?: boolean
+  showFocusButton?: boolean
   onMarkDone: (taskId: TaskId) => Promise<void>
-  onToggleCommitment?: (taskId: TaskId) => void
+  onToggleFocus?: (taskId: TaskId) => void
   onDragStart: (event: DragEvent, taskId: TaskId, sourceColumn: ColumnKey) => void
   onDragEnd: () => void
   onDragOver: (event: DragEvent, columnKey: ColumnKey) => void
@@ -36,9 +36,9 @@ function TaskPanel({
   compact = false,
   isDropActive,
   className = '',
-  showCommitButton = false,
+  showFocusButton = false,
   onMarkDone,
-  onToggleCommitment,
+  onToggleFocus,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -76,9 +76,9 @@ function TaskPanel({
                 task={task}
                 columnKey={columnKey}
                 compact={compact}
-                showCommitButton={showCommitButton}
+                showFocusButton={showFocusButton}
                 onMarkDone={onMarkDone}
-                onToggleCommitment={onToggleCommitment}
+                onToggleFocus={onToggleFocus}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
               />

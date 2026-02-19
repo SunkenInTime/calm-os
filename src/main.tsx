@@ -40,6 +40,12 @@ const convex = convexUrl ? new ConvexReactClient(convexUrl) : null
 const mode = new URLSearchParams(window.location.search).get('mode')
 const isQuickAddMode = mode === 'quick-add'
 
+if (isQuickAddMode) {
+  document.body.classList.add('quick-add-mode')
+} else {
+  document.body.classList.remove('quick-add-mode')
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>

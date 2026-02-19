@@ -25,6 +25,11 @@ body {
   color: hsl(216deg 20% 16%);
 }
 
+body.quick-add-mode,
+body.quick-add-mode #root {
+  background: transparent;
+}
+
 @keyframes task-exit {
   0% {
     opacity: 1;
