@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConvexProvider, ConvexReactClient } from 'convex/react'
+import '@radix-ui/themes/styles.css'
 import App from './App.tsx'
 import QuickAddOverlay from './QuickAddOverlay.tsx'
 import './index.css'
@@ -38,6 +39,12 @@ const convexUrl = import.meta.env.VITE_CONVEX_URL
 const convex = convexUrl ? new ConvexReactClient(convexUrl) : null
 const mode = new URLSearchParams(window.location.search).get('mode')
 const isQuickAddMode = mode === 'quick-add'
+
+if (isQuickAddMode) {
+  document.body.classList.add('quick-add-mode')
+} else {
+  document.body.classList.remove('quick-add-mode')
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

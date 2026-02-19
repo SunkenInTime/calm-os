@@ -21,6 +21,41 @@ body,
 }
 
 body {
-  background-color: rgb(10 10 10);
-  color: rgb(229 229 229);
+  background-color: hsl(210deg 20% 98%);
+  color: hsl(216deg 20% 16%);
+}
+
+body.quick-add-mode,
+body.quick-add-mode #root {
+  background: transparent;
+}
+
+@keyframes task-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    text-decoration: line-through;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+    height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+.task-exiting {
+  animation: task-exit 400ms ease-out forwards;
+  pointer-events: none;
+}
+
+.drop-active {
+  outline: 2px solid var(--indigo-8);
+  outline-offset: -2px;
+  background-color: var(--indigo-a2);
 }

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as daily from "../daily.js";
 import type * as ideas from "../ideas.js";
 import type * as tasks from "../tasks.js";
 
@@ -18,6 +19,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  daily: typeof daily;
   ideas: typeof ideas;
   tasks: typeof tasks;
 }>;

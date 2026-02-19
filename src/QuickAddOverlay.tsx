@@ -1,113 +1,198 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation } from 'convex/react'
+import { Lightbulb, Link, ListChecks, X } from 'lucide-react'
 import { api } from '../convex/_generated/api'
-import type React from 'react'
+import { parseDateAlias, stripAlias } from './lib/dateAliases'
+import { formatDateKey } from './lib/date'
 
-type QuickAddMode = 'task' | 'idea'
+type QuickAddMode = 'idea' | 'task'
+
+function toReferenceUrl(value: string | null): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
 
 function QuickAddOverlay() {
   const createTask = useMutation(api.tasks.createTask)
   const createIdea = useMutation(api.ideas.createIdea)
   const [mode, setMode] = useState<QuickAddMode>('task')
   const [title, setTitle] = useState('')
+  const [resolvedDate, setResolvedDate] = useState<string | null>(null)
+  const [referenceUrl, setReferenceUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    function focusInput() {
-      setMode('task')
-      setTitle('')
-      setSubmitError('')
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-      })
-    }
+  const resetState = useCallback(() => {
+    setMode('task')
+    setTitle('')
+    setResolvedDate(null)
+    setReferenceUrl(null)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
 
+  useEffect(() => {
+    resetState()
+    window.addEventListener('focus', resetState)
+    return () => window.removeEventListener('focus', resetState)
+  }, [resetState])
+
+  useEffect(() => {
     function onEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         window.ipcRenderer?.send?.('quick-add:close')
       }
     }
-
-    focusInput()
-    window.addEventListener('focus', focusInput)
     window.addEventListener('keydown', onEscape)
-
-    return () => {
-      window.removeEventListener('focus', focusInput)
-      window.removeEventListener('keydown', onEscape)
-    }
+    return () => window.removeEventListener('keydown', onEscape)
   }, [])
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSubmitError('')
-
-    const trimmedTitle = title.trim()
-    if (!trimmedTitle) {
-      setSubmitError('Title is required.')
-      return
+  useEffect(() => {
+    if (mode === 'task') {
+      const alias = parseDateAlias(title)
+      if (alias) {
+        setResolvedDate(alias.dateKey)
+      } else {
+        setResolvedDate(null)
+      }
+    } else {
+      setResolvedDate(null)
     }
+  }, [title, mode])
+
+  useEffect(() => {
+    async function readClipboardReference() {
+      if (mode !== 'idea') {
+        setReferenceUrl(null)
+        return
+      }
+
+      try {
+        const clipboardText = await window.ipcRenderer?.invoke?.('quick-add:read-clipboard-text')
+        const nextReferenceUrl = toReferenceUrl(typeof clipboardText === 'string' ? clipboardText : null)
+        setReferenceUrl(nextReferenceUrl)
+      } catch {
+        setReferenceUrl(null)
+      }
+    }
+
+    void readClipboardReference()
+  }, [mode])
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      setMode((prev) => (prev === 'idea' ? 'task' : 'idea'))
+    }
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = title.trim()
+    if (!trimmed || isSubmitting) return
 
     try {
       setIsSubmitting(true)
       if (mode === 'task') {
-        await createTask({
-          title: trimmedTitle,
-          dueDate: null,
-        })
+        const alias = parseDateAlias(trimmed)
+        const cleanTitle = alias ? stripAlias(trimmed, alias) : trimmed
+        const submitDueDate = alias ? alias.dateKey : resolvedDate
+        await createTask({ title: cleanTitle, dueDate: submitDueDate })
       } else {
-        await createIdea({
-          title: trimmedTitle,
-        })
+        await createIdea({ title: trimmed, referenceUrl: referenceUrl ?? undefined })
       }
       setTitle('')
+      setResolvedDate(null)
+      setReferenceUrl(null)
       window.ipcRenderer?.send?.('quick-add:close')
-    } catch {
-      setSubmitError(`Could not create ${mode} right now.`)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  function handleInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Tab') {
-      event.preventDefault()
-      setMode((current) => (current === 'task' ? 'idea' : 'task'))
+  function clearDate() {
+    setResolvedDate(null)
+    const alias = parseDateAlias(title)
+    if (alias) {
+      setTitle(stripAlias(title, alias))
     }
+    inputRef.current?.focus()
   }
 
-  const placeholder = mode === 'task' ? 'Add task...' : 'Capture idea...'
-  const modeLabel = mode === 'task' ? 'Task' : 'Idea'
+  const dateLabel = resolvedDate ? formatDateKey(resolvedDate) : null
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-neutral-950/95 p-3">
+    <div className="flex h-screen w-screen items-center justify-center px-6" style={{ background: 'transparent' }}>
       <form
         onSubmit={handleSubmit}
-        className="w-full rounded-2xl border border-neutral-700/80 bg-neutral-900 p-3 shadow-2xl"
+        className="flex w-full max-w-[920px] items-center rounded-3xl bg-white shadow-2xl ring-1 ring-slate-900/5"
       >
-        <div className="flex items-center gap-2">
-          <span className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-300">
-            {modeLabel}
-          </span>
-          <input
-            ref={inputRef}
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={placeholder}
-            className="w-full rounded-xl border border-neutral-800 bg-neutral-800 px-4 py-3 text-base text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-600 focus:outline-none"
-          />
-        </div>
-        <div className="mt-2 flex items-center justify-between px-1 text-xs text-neutral-500">
-          <span>Tab to toggle Task/Idea</span>
-          <span>Esc to close</span>
-        </div>
-        {submitError && <p className="mt-2 px-1 text-sm text-neutral-400">{submitError}</p>}
-        <button type="submit" disabled={isSubmitting} className="hidden">
-          Add
+        <button
+          type="button"
+          onClick={() => setMode((prev) => (prev === 'idea' ? 'task' : 'idea'))}
+          className={`ml-3 flex shrink-0 items-center gap-2.5 rounded-2xl px-4 py-2.5 text-base font-medium transition-colors select-none ${mode === 'task'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-slate-100 text-slate-700'
+            }`}
+          tabIndex={-1}
+        >
+          {mode === 'task' ? <ListChecks size={18} /> : <Lightbulb size={18} />}
+          {mode === 'task' ? 'Task' : 'Idea'}
         </button>
+
+        <input
+          ref={inputRef}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            mode === 'task'
+              ? 'Add a task... (TD, TM, MON-SUN for date)'
+              : 'Capture an idea...'
+          }
+          className="min-w-0 flex-1 bg-transparent px-5 py-5 text-lg text-slate-800 placeholder:text-slate-400 focus:outline-none"
+          autoFocus
+        />
+
+        {mode === 'task' && dateLabel && (
+          <span className="mr-3 flex shrink-0 items-center gap-1.5 rounded-xl bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700">
+            {dateLabel}
+            <button
+              type="button"
+              onClick={clearDate}
+              className="rounded-full p-0.5 hover:bg-indigo-200"
+              tabIndex={-1}
+            >
+              <X size={13} />
+            </button>
+          </span>
+        )}
+
+        {mode === 'idea' && referenceUrl && (
+          <span className="mr-3 flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+            <Link size={13} />
+            <span className="max-w-[260px] truncate">{referenceUrl}</span>
+            <button
+              type="button"
+              onClick={() => setReferenceUrl(null)}
+              className="rounded-full p-0.5 hover:bg-slate-200"
+              tabIndex={-1}
+            >
+              <X size={13} />
+            </button>
+          </span>
+        )}
       </form>
     </div>
   )
