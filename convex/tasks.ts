@@ -17,6 +17,19 @@ function addDays(date: Date, days: number): Date {
   return copy;
 }
 
+function parseDateKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
+function normalizeDateKey(input: string): string {
+  const trimmed = input.trim();
+  if (!ISO_DATE_KEY_REGEX.test(trimmed)) {
+    throw new Error("todayKey must be YYYY-MM-DD.");
+  }
+  return trimmed;
+}
+
 function normalizeDueDate(input: string | null | undefined): string | null {
   if (input === null || input === undefined) {
     return null;
@@ -50,13 +63,14 @@ function dateKeyFromIso(isoString: string | undefined): string | null {
   return toLocalDateKey(parsed);
 }
 
-function getHorizonDateKeys() {
-  const now = new Date();
+function getHorizonDateKeys(todayKeyInput: string) {
+  const todayKey = normalizeDateKey(todayKeyInput);
+  const todayDate = parseDateKey(todayKey);
   return {
-    todayKey: toLocalDateKey(now),
-    tomorrowKey: toLocalDateKey(addDays(now, 1)),
-    dayAfterKey: toLocalDateKey(addDays(now, 2)),
-    yesterdayKey: toLocalDateKey(addDays(now, -1)),
+    todayKey,
+    tomorrowKey: toLocalDateKey(addDays(todayDate, 1)),
+    dayAfterKey: toLocalDateKey(addDays(todayDate, 2)),
+    yesterdayKey: toLocalDateKey(addDays(todayDate, -1)),
   };
 }
 
@@ -150,9 +164,13 @@ export const listUnscheduledTasks = query({
 });
 
 export const listHorizonTasks = query({
-  args: {},
-  handler: async (ctx) => {
-    const { todayKey, tomorrowKey, dayAfterKey } = getHorizonDateKeys();
+  args: {
+    todayKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { todayKey, tomorrowKey, dayAfterKey } = getHorizonDateKeys(
+      args.todayKey,
+    );
     const activeTasks = await ctx.db
       .query("tasks")
       .withIndex("by_status_createdAt", (q) => q.eq("status", "active"))
@@ -185,10 +203,12 @@ export const listHorizonTasks = query({
 });
 
 export const getPlannerSnapshot = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    todayKey: v.string(),
+  },
+  handler: async (ctx, args) => {
     const { todayKey, tomorrowKey, dayAfterKey, yesterdayKey } =
-      getHorizonDateKeys();
+      getHorizonDateKeys(args.todayKey);
 
     const activeTasks = await ctx.db
       .query("tasks")

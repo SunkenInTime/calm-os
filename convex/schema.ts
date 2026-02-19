@@ -16,6 +16,7 @@ export default defineSchema({
     .index("by_status_updatedAt", ["status", "updatedAt"]),
   ideas: defineTable({
     title: v.string(),
+    referenceUrl: v.optional(v.string()),
     rank: v.number(),
     status: v.union(v.literal("active"), v.literal("archived")),
     createdAt: v.string(),

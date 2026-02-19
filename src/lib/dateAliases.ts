@@ -8,27 +8,38 @@ export type ParsedAlias = {
   endIndex: number
 }
 
-const ALIAS_PATTERN = /\b(TD|TM|MON|TUE|WED|THU|FRI|SAT|SUN)\b/gi
+const ALIAS_PATTERN =
+  /\b(TD|TM|TODAY|TOMORROW|MON|MONDAY|TUE|TUES|TUESDAY|WED|WEDNESDAY|THU|THUR|THURS|THURSDAY|FRI|FRIDAY|SAT|SATURDAY|SUN|SUNDAY)\b/gi
 
 const DAY_NAME_MAP: Record<string, number> = {
   SUN: 0,
+  SUNDAY: 0,
   MON: 1,
+  MONDAY: 1,
   TUE: 2,
+  TUES: 2,
+  TUESDAY: 2,
   WED: 3,
+  WEDNESDAY: 3,
   THU: 4,
+  THUR: 4,
+  THURS: 4,
+  THURSDAY: 4,
   FRI: 5,
+  FRIDAY: 5,
   SAT: 6,
+  SATURDAY: 6,
 }
 
 function resolveAlias(alias: string): { dateKey: string; label: string } {
   const upper = alias.toUpperCase()
   const now = new Date()
 
-  if (upper === 'TD') {
+  if (upper === 'TD' || upper === 'TODAY') {
     return { dateKey: toLocalDateKey(now), label: 'Today' }
   }
 
-  if (upper === 'TM') {
+  if (upper === 'TM' || upper === 'TOMORROW') {
     return { dateKey: toLocalDateKey(addDays(now, 1)), label: 'Tomorrow' }
   }
 

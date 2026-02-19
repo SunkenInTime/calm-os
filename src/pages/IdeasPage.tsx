@@ -1,6 +1,6 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useState, type DragEvent } from 'react'
 import { useMutation, useQuery } from 'convex/react'
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link, Plus, Trash2 } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import type { IdeaDoc } from '../lib/domain'
 
@@ -8,11 +8,14 @@ function IdeasPage() {
   const ideas = useQuery(api.ideas.listIdeas) as IdeaDoc[] | undefined
   const createIdea = useMutation(api.ideas.createIdea)
   const moveIdea = useMutation(api.ideas.moveIdea)
+  const reorderIdea = useMutation(api.ideas.reorderIdea)
   const archiveIdea = useMutation(api.ideas.archiveIdea)
 
   const [ideaTitle, setIdeaTitle] = useState('')
   const [ideaError, setIdeaError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [draggedIdeaId, setDraggedIdeaId] = useState<IdeaDoc['_id'] | null>(null)
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
 
   async function handleCreateIdea(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,6 +35,43 @@ function IdeasPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  function handleDragStart(event: DragEvent<HTMLElement>, ideaId: IdeaDoc['_id']) {
+    setDraggedIdeaId(ideaId)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(ideaId))
+  }
+
+  function handleDragOver(event: DragEvent<HTMLElement>, index: number) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTargetIndex(index)
+  }
+
+  function handleDragEnd() {
+    setDraggedIdeaId(null)
+    setDropTargetIndex(null)
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>, targetIndex: number) {
+    event.preventDefault()
+    if (!ideas || !draggedIdeaId) {
+      handleDragEnd()
+      return
+    }
+
+    const currentIndex = ideas.findIndex((idea) => idea._id === draggedIdeaId)
+    handleDragEnd()
+    if (currentIndex < 0 || currentIndex === targetIndex) {
+      return
+    }
+    void reorderIdea({ ideaId: draggedIdeaId, targetIndex })
+  }
+
+  function handleOpenReference(event: React.MouseEvent<HTMLButtonElement>, url: string) {
+    event.stopPropagation()
+    void window.ipcRenderer?.invoke?.('shell:open-external-url', url)
   }
 
   if (!ideas) {
@@ -92,13 +132,32 @@ function IdeasPage() {
               {ideas.map((idea, index) => (
                 <article
                   key={idea._id}
-                  className="group flex items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5"
+                  draggable
+                  onDragStart={(event) => handleDragStart(event, idea._id)}
+                  onDragOver={(event) => handleDragOver(event, index)}
+                  onDrop={(event) => handleDrop(event, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`group flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                    dropTargetIndex === index
+                      ? 'border-indigo-300 bg-indigo-50/70'
+                      : 'border-slate-100 bg-slate-50/50'
+                  } ${draggedIdeaId === idea._id ? 'cursor-grabbing opacity-80' : 'cursor-grab active:cursor-grabbing'}`}
                 >
                   <div className="flex min-w-0 items-start gap-2">
                     <span className="mt-0.5 shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
                       #{index + 1}
                     </span>
-                    <span className="text-sm text-slate-700">{idea.title}</span>
+                    <span className="min-w-0 text-sm text-slate-700">{idea.title}</span>
+                    {idea.referenceUrl && (
+                      <button
+                        type="button"
+                        onClick={(event) => handleOpenReference(event, idea.referenceUrl!)}
+                        className="mt-px shrink-0 text-slate-400 transition-colors hover:text-indigo-600"
+                        aria-label={`Open reference for ${idea.title}`}
+                      >
+                        <Link size={12} />
+                      </button>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                     <button

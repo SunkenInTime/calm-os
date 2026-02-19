@@ -3,13 +3,6 @@ import { v } from "convex/values";
 
 const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-function toLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function parseDateKey(dateKey: string): Date {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0, 0);
@@ -59,18 +52,22 @@ async function ensureDailyByDateKey(
 }
 
 export const getTodayDaily = query({
-  args: {},
-  handler: async (ctx) => {
-    const todayKey = toLocalDateKey(new Date());
+  args: {
+    todayKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const todayKey = normalizeDateKey(args.todayKey);
     const daily = await getDailyByDateKey(ctx, todayKey);
     return { todayKey, daily };
   },
 });
 
 export const getTodayDailyModel = query({
-  args: {},
-  handler: async (ctx) => {
-    const todayKey = toLocalDateKey(new Date());
+  args: {
+    todayKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const todayKey = normalizeDateKey(args.todayKey);
     const daily = await getDailyByDateKey(ctx, todayKey);
     const commitmentTasks = [];
 
@@ -211,9 +208,11 @@ export const markRitualCompleted = mutation({
 });
 
 export const getReentryStatus = query({
-  args: {},
-  handler: async (ctx) => {
-    const todayKey = toLocalDateKey(new Date());
+  args: {
+    todayKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const todayKey = normalizeDateKey(args.todayKey);
     const dailyDocs = await ctx.db
       .query("daily")
       .withIndex("by_dateKey")

@@ -42,12 +42,20 @@ function SmartTaskInput({
   const detectAlias = useCallback(
     (text: string) => {
       const parsed = parseDateAlias(text)
-      setAlias(parsed)
-      if (parsed) {
-        onResolvedDate(parsed.dateKey)
-      }
+      setAlias((previousAlias) => {
+        if (parsed) {
+          onResolvedDate(parsed.dateKey)
+          return parsed
+        }
+
+        // Only clear date when an inline keyword was previously driving it.
+        if (previousAlias && resolvedDate === previousAlias.dateKey) {
+          onResolvedDate(null)
+        }
+        return null
+      })
     },
-    [onResolvedDate],
+    [onResolvedDate, resolvedDate],
   )
 
   useEffect(() => {

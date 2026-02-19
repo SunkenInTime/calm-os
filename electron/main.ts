@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, screen, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -28,6 +28,7 @@ let quickAddWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
 
+app.setName('Calm OS')
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.disableHardwareAcceleration()
 
@@ -107,12 +108,15 @@ function createTray() {
 
 function createWindow() {
   win = new BrowserWindow({
+    title: 'Calm OS',
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     backgroundColor: '#0a0a0a',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
   })
+  win.setMenuBarVisibility(false)
 
   win.on('close', (event) => {
     if (isQuitting) {
@@ -256,7 +260,30 @@ ipcMain.on('quick-add:close', () => {
   quickAddWindow?.hide()
 })
 
+ipcMain.handle('quick-add:read-clipboard-text', () => {
+  return clipboard.readText()
+})
+
+ipcMain.handle('shell:open-external-url', async (_event, rawUrl: string) => {
+  const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : ''
+  if (!trimmed) {
+    return false
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false
+    }
+    await shell.openExternal(parsed.toString())
+    return true
+  } catch {
+    return false
+  }
+})
+
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null)
   createTray()
   createWindow()
   createQuickAddWindow()

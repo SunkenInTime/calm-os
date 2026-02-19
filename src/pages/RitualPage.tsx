@@ -7,7 +7,7 @@ import DecisionTaskCard from '../components/ritual/DecisionTaskCard'
 import RitualVariantFrame from '../components/ritual/RitualVariantFrame'
 import SmartTaskInput from '../components/tasks/SmartTaskInput'
 import { useSmartTaskInput } from '../lib/useSmartTaskInput'
-import { addDays, formatDateKey, getRelativeDueLabel, toLocalDateKey } from '../lib/date'
+import { formatDateKey, getRelativeDueLabel, toLocalDateKey } from '../lib/date'
 import type { DailyModel, PlannerSnapshot, RitualKind, TaskDoc, TaskId } from '../lib/domain'
 
 const RITUAL_COPY = {
@@ -34,8 +34,13 @@ type RitualPageProps = {
 
 function RitualPage({ kind }: RitualPageProps) {
   const navigate = useNavigate()
-  const planner = useQuery(api.tasks.getPlannerSnapshot) as PlannerSnapshot | undefined
-  const dailyModel = useQuery(api.daily.getTodayDailyModel) as DailyModel | undefined
+  const localTodayKey = toLocalDateKey(new Date())
+  const planner = useQuery(api.tasks.getPlannerSnapshot, {
+    todayKey: localTodayKey,
+  }) as PlannerSnapshot | undefined
+  const dailyModel = useQuery(api.daily.getTodayDailyModel, {
+    todayKey: localTodayKey,
+  }) as DailyModel | undefined
   const setCommitmentsForDate = useMutation(api.daily.setCommitmentsForDate)
   const markRitualCompleted = useMutation(api.daily.markRitualCompleted)
   const createTask = useMutation(api.tasks.createTask)
@@ -61,10 +66,9 @@ function RitualPage({ kind }: RitualPageProps) {
       (dailyModel.daily?.commitmentTaskIds ?? []).filter((taskId) => activeTaskIds.has(taskId)),
     )
 
-    const tomorrowKey = toLocalDateKey(addDays(new Date(), 1))
     const defaults: Record<string, string> = {}
     for (const task of planner.activeTasks) {
-      defaults[task._id] = tomorrowKey
+      defaults[task._id] = planner.tomorrowKey
     }
     setMoveDateByTaskId(defaults)
   }, [dailyModel, initializedDateKey, planner])

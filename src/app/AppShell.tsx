@@ -8,12 +8,16 @@ import TaskComposerModal from '../components/tasks/TaskComposerModal'
 import DashboardPage from '../pages/DashboardPage'
 import IdeasPage from '../pages/IdeasPage'
 import RitualPage from '../pages/RitualPage'
+import { toLocalDateKey } from '../lib/date'
 import type { DailyModel } from '../lib/domain'
 
 function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
-  const dailyModel = useQuery(api.daily.getTodayDailyModel) as DailyModel | undefined
+  const localTodayKey = toLocalDateKey(new Date())
+  const dailyModel = useQuery(api.daily.getTodayDailyModel, {
+    todayKey: localTodayKey,
+  }) as DailyModel | undefined
   const createTask = useMutation(api.tasks.createTask)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
 

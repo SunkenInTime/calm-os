@@ -1,9 +1,30 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+function normalizeReferenceUrl(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Reference URL must be a valid URL.");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Reference URL must start with http:// or https://");
+  }
+
+  return parsed.toString();
+}
+
 export const createIdea = mutation({
   args: {
     title: v.string(),
+    referenceUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const title = args.title.trim();
@@ -19,9 +40,11 @@ export const createIdea = mutation({
 
     const nextRank = activeIdeas.length === 0 ? 1 : activeIdeas[0].rank + 1;
     const now = new Date().toISOString();
+    const referenceUrl = normalizeReferenceUrl(args.referenceUrl);
 
     return await ctx.db.insert("ideas", {
       title,
+      referenceUrl,
       rank: nextRank,
       status: "active",
       createdAt: now,
@@ -76,6 +99,48 @@ export const moveIdea = mutation({
       rank: current.rank,
       updatedAt: now,
     });
+  },
+});
+
+export const reorderIdea = mutation({
+  args: {
+    ideaId: v.id("ideas"),
+    targetIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const ideas = await ctx.db
+      .query("ideas")
+      .withIndex("by_status_rank", (q) => q.eq("status", "active"))
+      .order("asc")
+      .collect();
+
+    const currentIndex = ideas.findIndex((idea) => idea._id === args.ideaId);
+    if (currentIndex === -1) {
+      throw new Error("Idea not found.");
+    }
+
+    const maxIndex = Math.max(ideas.length - 1, 0);
+    const targetIndex = Math.max(0, Math.min(Math.floor(args.targetIndex), maxIndex));
+    if (targetIndex === currentIndex) {
+      return;
+    }
+
+    const reordered = [...ideas];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const now = new Date().toISOString();
+    for (let index = 0; index < reordered.length; index += 1) {
+      const idea = reordered[index];
+      const nextRank = index + 1;
+      if (idea.rank === nextRank && idea._id !== moved._id) {
+        continue;
+      }
+      await ctx.db.patch(idea._id, {
+        rank: nextRank,
+        updatedAt: now,
+      });
+    }
   },
 });
 

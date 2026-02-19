@@ -1,5 +1,6 @@
 {
   "name": "calm-os",
+  "productName": "Calm OS",
   "private": true,
   "version": "0.0.0",
   "type": "module",

@@ -2,14 +2,19 @@ import { useCallback, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
-import { getRelativeDueLabel } from '../lib/date'
+import { getRelativeDueLabel, toLocalDateKey } from '../lib/date'
 import type { DailyModel, PlannerSnapshot, TaskDoc, TaskId } from '../lib/domain'
 import TaskCard from '../components/tasks/TaskCard'
 import { useDragAndDrop, type ColumnKey } from '../lib/useDragAndDrop'
 
 function DashboardPage() {
-  const planner = useQuery(api.tasks.getPlannerSnapshot) as PlannerSnapshot | undefined
-  const dailyModel = useQuery(api.daily.getTodayDailyModel) as DailyModel | undefined
+  const localTodayKey = toLocalDateKey(new Date())
+  const planner = useQuery(api.tasks.getPlannerSnapshot, {
+    todayKey: localTodayKey,
+  }) as PlannerSnapshot | undefined
+  const dailyModel = useQuery(api.daily.getTodayDailyModel, {
+    todayKey: localTodayKey,
+  }) as DailyModel | undefined
   const markTaskDone = useMutation(api.tasks.markTaskDone)
   const updateTaskDueDate = useMutation(api.tasks.setTaskDueDate)
   const addCommitment = useMutation(api.daily.addCommitmentForDate)
@@ -98,11 +103,10 @@ function DashboardPage() {
           onDragOver={(e) => handleDragOver(e, 'commitments')}
           onDragLeave={(e) => handleDragLeave(e, 'commitments')}
           onDrop={(e) => handleDropEvent(e, 'commitments')}
-          className={`rounded-xl border bg-indigo-50/30 p-4 shadow-sm ${
-            activeDropColumn === 'commitments'
+          className={`rounded-xl border bg-indigo-50/30 p-4 shadow-sm ${activeDropColumn === 'commitments'
               ? 'border-indigo-300 drop-active'
               : 'border-indigo-100'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-slate-700">Commitments</h3>
@@ -142,9 +146,8 @@ function DashboardPage() {
             onDragOver={(e) => handleDragOver(e, 'today')}
             onDragLeave={(e) => handleDragLeave(e, 'today')}
             onDrop={(e) => handleDropEvent(e, 'today')}
-            className={`rounded-xl border bg-white p-4 shadow-sm ${
-              activeDropColumn === 'today' ? 'border-slate-300 drop-active' : 'border-slate-200'
-            }`}
+            className={`rounded-xl border bg-white p-4 shadow-sm ${activeDropColumn === 'today' ? 'border-slate-300 drop-active' : 'border-slate-200'
+              }`}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-slate-700">Due today</h3>
@@ -162,6 +165,8 @@ function DashboardPage() {
                   showFocusButton
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </div>
