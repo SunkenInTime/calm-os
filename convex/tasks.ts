@@ -1,5 +1,6 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 
 const ISO_DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -79,6 +80,25 @@ function compareByCreatedAtDesc(
   b: { createdAt: string },
 ): number {
   return b.createdAt.localeCompare(a.createdAt);
+}
+
+async function removeTaskFromDailyCommitments(
+  ctx: MutationCtx,
+  dateKey: string,
+  taskId: Id<"tasks">,
+): Promise<void> {
+  const daily = await ctx.db
+    .query("daily")
+    .withIndex("by_dateKey", (q) => q.eq("dateKey", dateKey))
+    .unique();
+
+  if (!daily) return;
+  if (!daily.commitmentTaskIds.includes(taskId)) return;
+
+  await ctx.db.patch(daily._id, {
+    commitmentTaskIds: daily.commitmentTaskIds.filter((id) => id !== taskId),
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 export const createTask = mutation({
@@ -327,9 +347,16 @@ export const setTaskDueDate = mutation({
       throw new Error("Task not found.");
     }
 
+    const newDueDate = normalizeDueDate(args.dueDate);
+    const todayKey = toLocalDateKey(new Date());
+
     await ctx.db.patch(args.taskId, {
-      dueDate: normalizeDueDate(args.dueDate),
+      dueDate: newDueDate,
       updatedAt: new Date().toISOString(),
     });
+
+    if (newDueDate !== todayKey) {
+      await removeTaskFromDailyCommitments(ctx, todayKey, args.taskId);
+    }
   },
 });

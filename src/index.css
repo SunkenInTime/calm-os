@@ -54,8 +54,87 @@ body.quick-add-mode #root {
   pointer-events: none;
 }
 
+@keyframes idea-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.idea-exiting {
+  animation: idea-exit 180ms ease-out forwards;
+  pointer-events: none;
+}
+
 .drop-active {
   outline: 2px solid var(--indigo-8);
   outline-offset: -2px;
   background-color: var(--indigo-a2);
+}
+
+/* ─── Date Picker ─── */
+
+@keyframes cal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.calm-datepicker {
+  animation: cal-enter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow:
+    0 0 0 1px hsl(220 20% 88% / 0.5),
+    0 4px 16px -2px hsl(220 25% 10% / 0.1),
+    0 12px 40px -8px hsl(220 25% 10% / 0.08);
+}
+
+.calm-datepicker-nav {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.calm-datepicker-day {
+  transition: background-color 100ms ease, color 100ms ease, box-shadow 100ms ease;
+}
+
+.calm-datepicker-day:hover {
+  background-color: hsl(220 16% 94%);
+}
+
+.calm-datepicker-day[data-today='true']:not([data-selected='true']) {
+  background-color: hsl(226 60% 96%);
+  color: hsl(226 60% 48%);
+  font-weight: 600;
+}
+
+.calm-datepicker-day[data-today='true']:not([data-selected='true']):hover {
+  background-color: hsl(226 55% 91%);
+}
+
+.calm-datepicker-day[data-selected='true'] {
+  background-color: hsl(226 68% 52%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 1px 4px hsl(226 68% 48% / 0.28);
+}
+
+.calm-datepicker-day[data-selected='true']:hover {
+  background-color: hsl(226 68% 48%);
+}
+
+.calm-datepicker-today-btn {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.calm-datepicker-today-btn:hover {
+  background-color: hsl(220 16% 93%);
+  color: hsl(220 14% 38%);
 }

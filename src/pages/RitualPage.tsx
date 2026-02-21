@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
-import { ArrowLeft, ArrowRight, CornerDownLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CornerDownLeft, Link2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../convex/_generated/api'
 import DecisionTaskCard from '../components/ritual/DecisionTaskCard'
@@ -8,7 +8,7 @@ import RitualVariantFrame from '../components/ritual/RitualVariantFrame'
 import SmartTaskInput from '../components/tasks/SmartTaskInput'
 import { useSmartTaskInput } from '../lib/useSmartTaskInput'
 import { formatDateKey, getRelativeDueLabel, toLocalDateKey } from '../lib/date'
-import type { DailyModel, PlannerSnapshot, RitualKind, TaskDoc, TaskId } from '../lib/domain'
+import type { DailyModel, IdeaDoc, PlannerSnapshot, RitualKind, TaskDoc, TaskId } from '../lib/domain'
 
 const RITUAL_COPY = {
   morning: {
@@ -41,9 +41,11 @@ function RitualPage({ kind }: RitualPageProps) {
   const dailyModel = useQuery(api.daily.getTodayDailyModel, {
     todayKey: localTodayKey,
   }) as DailyModel | undefined
+  const ideas = useQuery(api.ideas.listIdeas) as IdeaDoc[] | undefined
   const setCommitmentsForDate = useMutation(api.daily.setCommitmentsForDate)
   const markRitualCompleted = useMutation(api.daily.markRitualCompleted)
   const createTask = useMutation(api.tasks.createTask)
+  const archiveIdea = useMutation(api.ideas.archiveIdea)
   const markTaskDone = useMutation(api.tasks.markTaskDone)
   const setTaskDueDate = useMutation(api.tasks.setTaskDueDate)
   const dropTask = useMutation(api.tasks.dropTask)
@@ -55,9 +57,15 @@ function RitualPage({ kind }: RitualPageProps) {
   const [isFinishing, setIsFinishing] = useState(false)
   const [hasCompletedRitual, setHasCompletedRitual] = useState(false)
   const [moveDateByTaskId, setMoveDateByTaskId] = useState<Record<string, string>>({})
+  const [hiddenMorningIdeaIds, setHiddenMorningIdeaIds] = useState<Record<string, true>>({})
+  const [hiddenEveningIdeaIds, setHiddenEveningIdeaIds] = useState<Record<string, true>>({})
+  const [schedulePromptIdeaId, setSchedulePromptIdeaId] = useState<IdeaDoc['_id'] | null>(null)
+  const [ideaActionPendingId, setIdeaActionPendingId] = useState<IdeaDoc['_id'] | null>(null)
+  const [ideaToastMessage, setIdeaToastMessage] = useState('')
   const dailyModelRef = useRef<DailyModel | undefined>(undefined)
   const hasCompletedRitualRef = useRef(false)
   const completionStartedRef = useRef(false)
+  const ideaToastTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
     dailyModelRef.current = dailyModel
@@ -105,7 +113,8 @@ function RitualPage({ kind }: RitualPageProps) {
 
     const defaults: Record<string, string> = {}
     for (const task of planner.activeTasks) {
-      defaults[task._id] = planner.tomorrowKey
+      defaults[task._id] =
+        task.dueDate && task.dueDate < planner.todayKey ? planner.todayKey : planner.tomorrowKey
     }
     setMoveDateByTaskId(defaults)
   }, [dailyModel, initializedDateKey, planner])
@@ -115,6 +124,14 @@ function RitualPage({ kind }: RitualPageProps) {
       void completeRitual('unmount').catch(() => undefined)
     }
   }, [completeRitual])
+
+  useEffect(() => {
+    return () => {
+      if (ideaToastTimeoutRef.current) {
+        window.clearTimeout(ideaToastTimeoutRef.current)
+      }
+    }
+  }, [])
 
   if (!planner || !dailyModel) {
     return (
@@ -134,6 +151,12 @@ function RitualPage({ kind }: RitualPageProps) {
     (task) => !commitmentTaskIds.has(task._id),
   )
   const commitmentSelectionSet = new Set(selectedCommitmentTaskIds)
+  const morningIdeaCandidate =
+    (ideas ?? []).find((idea) => !hiddenMorningIdeaIds[idea._id]) ?? null
+  const eveningIdeaCandidate =
+    [...(ideas ?? [])]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .find((idea) => !hiddenEveningIdeaIds[idea._id]) ?? null
 
   function dueLabelFor(task: TaskDoc) {
     return getRelativeDueLabel(task.dueDate, planner!.todayKey)
@@ -146,6 +169,17 @@ function RitualPage({ kind }: RitualPageProps) {
     quickAdd.reset()
   }
 
+  function showIdeaToast(message: string) {
+    setIdeaToastMessage(message)
+    if (ideaToastTimeoutRef.current) {
+      window.clearTimeout(ideaToastTimeoutRef.current)
+    }
+    ideaToastTimeoutRef.current = window.setTimeout(() => {
+      setIdeaToastMessage('')
+      ideaToastTimeoutRef.current = null
+    }, 1800)
+  }
+
   function toggleSelectedCommitment(taskId: TaskId) {
     setSelectedCommitmentTaskIds((prev) =>
       prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId],
@@ -154,6 +188,13 @@ function RitualPage({ kind }: RitualPageProps) {
 
   function setMoveDate(taskId: TaskId, date: string) {
     setMoveDateByTaskId((prev) => ({ ...prev, [taskId]: date }))
+  }
+
+  function getDefaultMoveDate(task: TaskDoc): string {
+    if (task.dueDate && task.dueDate < planner!.todayKey) {
+      return planner!.todayKey
+    }
+    return planner!.tomorrowKey
   }
 
   async function resolveTaskAsDone(taskId: TaskId) {
@@ -173,6 +214,29 @@ function RitualPage({ kind }: RitualPageProps) {
   async function batchMoveAllCommitmentsToTomorrow() {
     for (const task of unfinishedCommitments) {
       await setTaskDueDate({ taskId: task._id, dueDate: planner!.tomorrowKey })
+    }
+  }
+
+  async function promoteIdeaToTask(idea: IdeaDoc, scheduleForToday: boolean) {
+    const dueDate = scheduleForToday ? planner!.todayKey : null
+    try {
+      setIdeaActionPendingId(idea._id)
+      await createTask({ title: idea.title, dueDate })
+      await archiveIdea({ ideaId: idea._id })
+      setSchedulePromptIdeaId(null)
+      showIdeaToast('Idea promoted to task.')
+    } finally {
+      setIdeaActionPendingId((current) => (current === idea._id ? null : current))
+    }
+  }
+
+  async function archiveRitualIdea(ideaId: IdeaDoc['_id']) {
+    try {
+      setIdeaActionPendingId(ideaId)
+      await archiveIdea({ ideaId })
+      setSchedulePromptIdeaId((current) => (current === ideaId ? null : current))
+    } finally {
+      setIdeaActionPendingId((current) => (current === ideaId ? null : current))
     }
   }
 
@@ -197,13 +261,8 @@ function RitualPage({ kind }: RitualPageProps) {
 
   // --- Morning check-in (compact panel) ---
   if (kind === 'morning') {
-    const overdueTasks = planner.todayTasks.filter(
-      (t) => t.dueDate && t.dueDate < planner.todayKey,
-    )
-    const dueTodayTasks = [
-      ...overdueTasks,
-      ...planner.todayTasks.filter((t) => t.dueDate === planner.todayKey),
-    ]
+    const morningOverdueTasks = planner.priorTasks
+    const dueTodayTasks = planner.todayTasks
 
     return (
       <div className="h-full overflow-y-auto">
@@ -218,6 +277,37 @@ function RitualPage({ kind }: RitualPageProps) {
             </div>
             <p className="mt-1 text-sm text-slate-500">{ritualCopy.subtitle}</p>
           </div>
+
+          {/* Section 0: Overdue notice + items (separate from Due Today) */}
+          {morningOverdueTasks.length > 0 && (
+            <div className="rounded-xl border border-amber-200/80 bg-amber-50/30 p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  OVERDUE
+                </span>
+                <p className="text-sm text-amber-800/80">
+                  You have {morningOverdueTasks.length} overdue {morningOverdueTasks.length === 1 ? 'item' : 'items'}.
+                </p>
+              </div>
+              <p className="mb-3 text-xs text-slate-500">
+                What's the state of these? You can resolve them here or continue without action.
+              </p>
+              <div className="space-y-2">
+                {morningOverdueTasks.map((task) => (
+                  <DecisionTaskCard
+                    key={task._id}
+                    task={task}
+                    dueLabel={dueLabelFor(task)}
+                    moveDate={moveDateByTaskId[task._id] ?? getDefaultMoveDate(task)}
+                    onMoveDateChange={setMoveDate}
+                    onMarkDone={resolveTaskAsDone}
+                    onMove={resolveTaskAsMove}
+                    onDrop={resolveTaskAsDrop}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Section 1: Due today */}
           {dueTodayTasks.length > 0 && (
@@ -284,6 +374,78 @@ function RitualPage({ kind }: RitualPageProps) {
             </div>
           )}
 
+          {selectedCommitmentTaskIds.length > 0 && morningIdeaCandidate && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-slate-700">Optional idea spark</h3>
+                <span className="text-[10px] uppercase tracking-wide text-slate-400">Incubation</span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-400">
+                One idea if it fits your energy. No pressure.
+              </p>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-sm text-slate-700">{morningIdeaCandidate.title}</p>
+                {morningIdeaCandidate.referenceUrl && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void window.ipcRenderer?.invoke?.(
+                        'shell:open-external-url',
+                        morningIdeaCandidate.referenceUrl!,
+                      )
+                    }
+                    className="mt-1 inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-white hover:text-slate-700"
+                  >
+                    <Link2 size={11} />
+                    Open reference
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  disabled={ideaActionPendingId === morningIdeaCandidate._id}
+                  onClick={() => setSchedulePromptIdeaId(morningIdeaCandidate._id)}
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Promote
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setHiddenMorningIdeaIds((prev) => ({ ...prev, [morningIdeaCandidate._id]: true }))
+                  }
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                >
+                  Not today
+                </button>
+              </div>
+              {schedulePromptIdeaId === morningIdeaCandidate._id && (
+                <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                  <p className="text-xs text-slate-600">Schedule for today?</p>
+                  <div className="mt-2 flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={ideaActionPendingId === morningIdeaCandidate._id}
+                      onClick={() => void promoteIdeaToTask(morningIdeaCandidate, true)}
+                      className="rounded bg-slate-700 px-2.5 py-1 text-xs text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      disabled={ideaActionPendingId === morningIdeaCandidate._id}
+                      onClick={() => void promoteIdeaToTask(morningIdeaCandidate, false)}
+                      className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Section 3: Quick add */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="mb-2 text-sm font-medium text-slate-700">Quick add</h3>
@@ -316,6 +478,11 @@ function RitualPage({ kind }: RitualPageProps) {
             <p className="text-xs text-slate-400">
               Valid with zero commitments. This check-in is just for clarity.
             </p>
+            {ideaToastMessage && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                {ideaToastMessage}
+              </div>
+            )}
             {ritualError && (
               <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
                 {ritualError}
@@ -393,7 +560,7 @@ function RitualPage({ kind }: RitualPageProps) {
                       key={task._id}
                       task={task}
                       dueLabel={dueLabelFor(task)}
-                      moveDate={moveDateByTaskId[task._id] ?? planner.tomorrowKey}
+                      moveDate={moveDateByTaskId[task._id] ?? getDefaultMoveDate(task)}
                       onMoveDateChange={setMoveDate}
                       onMarkDone={resolveTaskAsDone}
                       onMove={resolveTaskAsMove}
@@ -420,7 +587,7 @@ function RitualPage({ kind }: RitualPageProps) {
                     key={task._id}
                     task={task}
                     dueLabel={dueLabelFor(task)}
-                    moveDate={moveDateByTaskId[task._id] ?? planner.tomorrowKey}
+                    moveDate={moveDateByTaskId[task._id] ?? getDefaultMoveDate(task)}
                     onMoveDateChange={setMoveDate}
                     onMarkDone={resolveTaskAsDone}
                     onMove={resolveTaskAsMove}
@@ -431,11 +598,96 @@ function RitualPage({ kind }: RitualPageProps) {
             </div>
           )}
 
+          {eveningIdeaCandidate && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-slate-700">Optional idea review</h3>
+                <span className="text-[10px] uppercase tracking-wide text-slate-400">One at a time</span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-400">
+                A gentle check for an older spark. Skip any time.
+              </p>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-sm text-slate-700">{eveningIdeaCandidate.title}</p>
+                {eveningIdeaCandidate.referenceUrl && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void window.ipcRenderer?.invoke?.(
+                        'shell:open-external-url',
+                        eveningIdeaCandidate.referenceUrl!,
+                      )
+                    }
+                    className="mt-1 inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-white hover:text-slate-700"
+                  >
+                    <Link2 size={11} />
+                    Open reference
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  disabled={ideaActionPendingId === eveningIdeaCandidate._id}
+                  onClick={() => setSchedulePromptIdeaId(eveningIdeaCandidate._id)}
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Promote
+                </button>
+                <button
+                  type="button"
+                  disabled={ideaActionPendingId === eveningIdeaCandidate._id}
+                  onClick={() => void archiveRitualIdea(eveningIdeaCandidate._id)}
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Archive
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setHiddenEveningIdeaIds((prev) => ({ ...prev, [eveningIdeaCandidate._id]: true }))
+                  }
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                >
+                  Skip
+                </button>
+              </div>
+              {schedulePromptIdeaId === eveningIdeaCandidate._id && (
+                <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                  <p className="text-xs text-slate-600">Schedule for today?</p>
+                  <div className="mt-2 flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={ideaActionPendingId === eveningIdeaCandidate._id}
+                      onClick={() => void promoteIdeaToTask(eveningIdeaCandidate, true)}
+                      className="rounded bg-slate-700 px-2.5 py-1 text-xs text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      disabled={ideaActionPendingId === eveningIdeaCandidate._id}
+                      onClick={() => void promoteIdeaToTask(eveningIdeaCandidate, false)}
+                      className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs text-slate-400">
               You can finish even if you leave everything as-is.
             </p>
+            {ideaToastMessage && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                {ideaToastMessage}
+              </div>
+            )}
             {ritualError && (
               <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
                 {ritualError}
@@ -564,7 +816,7 @@ function RitualPage({ kind }: RitualPageProps) {
               key={task._id}
               task={task}
               dueLabel={dueLabelFor(task)}
-              moveDate={moveDateByTaskId[task._id] ?? planner.tomorrowKey}
+              moveDate={moveDateByTaskId[task._id] ?? getDefaultMoveDate(task)}
               onMoveDateChange={setMoveDate}
               onMarkDone={resolveTaskAsDone}
               onMove={resolveTaskAsMove}

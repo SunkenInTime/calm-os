@@ -6,7 +6,6 @@ import { api } from '../../convex/_generated/api'
 import IdeasSidebar from '../components/ideas/IdeasSidebar'
 import TaskComposerModal from '../components/tasks/TaskComposerModal'
 import DashboardPage from '../pages/DashboardPage'
-import IdeasPage from '../pages/IdeasPage'
 import RitualPage from '../pages/RitualPage'
 import { toLocalDateKey } from '../lib/date'
 import type { DailyModel } from '../lib/domain'
@@ -26,7 +25,6 @@ function AppShell() {
   }
 
   const isToday = location.pathname === '/'
-  const isIdeas = location.pathname === '/ideas'
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 text-slate-800">
@@ -44,12 +42,6 @@ function AppShell() {
                 className={`text-xs font-medium ${isToday ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 Today
-              </Link>
-              <Link
-                to="/ideas"
-                className={`text-xs font-medium ${isIdeas ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                Ideas
               </Link>
             </div>
           </div>
@@ -92,7 +84,6 @@ function AppShell() {
         <div className="min-h-0 flex-1 overflow-hidden">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/ideas" element={<IdeasPage />} />
             <Route path="/ritual/morning" element={<RitualPage kind="morning" />} />
             <Route path="/ritual/evening" element={<RitualPage kind="evening" />} />
             <Route path="/ritual/reset" element={<RitualPage kind="reset" />} />

@@ -8,6 +8,7 @@ type DatePickerPopoverProps = {
   onSelect: (dateKey: string) => void
   selectedDate: string | null
   anchorRef: React.RefObject<HTMLElement | null>
+  align?: 'left' | 'right'
 }
 
 const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -18,6 +19,7 @@ function DatePickerPopover({
   onSelect,
   selectedDate,
   anchorRef,
+  align = 'right',
 }: DatePickerPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const [viewDate, setViewDate] = useState(() => new Date())
@@ -82,37 +84,40 @@ function DatePickerPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-full z-50 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
+      className={`calm-datepicker absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200/80 bg-white p-3.5`}
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
           onClick={prevMonth}
-          className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="calm-datepicker-nav rounded-lg p-1.5 text-slate-400"
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={15} />
         </button>
-        <span className="text-xs font-medium text-slate-700">{monthLabel}</span>
+        <span className="text-[13px] font-semibold tracking-tight text-slate-700">
+          {monthLabel}
+        </span>
         <button
           type="button"
           onClick={nextMonth}
-          className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="calm-datepicker-nav rounded-lg p-1.5 text-slate-400"
         >
-          <ChevronRight size={14} />
+          <ChevronRight size={15} />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-0.5">
+
+      <div className="grid grid-cols-7 gap-px">
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
-            className="flex h-7 items-center justify-center text-[10px] font-medium text-slate-400"
+            className="flex h-8 items-center justify-center text-[10px] font-semibold uppercase tracking-widest text-slate-400"
           >
             {label}
           </div>
         ))}
         {cells.map((day, i) => {
           if (day === null) {
-            return <div key={`empty-${i}`} className="h-7" />
+            return <div key={`empty-${i}`} className="h-8" />
           }
           const dateKey = toLocalDateKey(new Date(year, month, day))
           const isToday = dateKey === todayKey
@@ -122,33 +127,32 @@ function DatePickerPopover({
             <button
               key={dateKey}
               type="button"
+              data-today={isToday}
+              data-selected={isSelected}
               onClick={() => {
                 onSelect(dateKey)
                 onClose()
               }}
-              className={`flex h-7 w-full items-center justify-center rounded-md text-xs transition-colors ${
-                isSelected
-                  ? 'bg-indigo-600 font-medium text-white'
-                  : isToday
-                    ? 'bg-indigo-50 font-medium text-indigo-700 hover:bg-indigo-100'
-                    : 'text-slate-700 hover:bg-slate-100'
-              }`}
+              className="calm-datepicker-day flex h-8 w-full items-center justify-center rounded-lg text-xs text-slate-700"
             >
               {day}
             </button>
           )
         })}
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          onSelect(todayKey)
-          onClose()
-        }}
-        className="mt-2 w-full rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
-      >
-        Today
-      </button>
+
+      <div className="mt-2.5 border-t border-slate-100 pt-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            onSelect(todayKey)
+            onClose()
+          }}
+          className="calm-datepicker-today-btn w-full rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500"
+        >
+          Today
+        </button>
+      </div>
     </div>
   )
 }

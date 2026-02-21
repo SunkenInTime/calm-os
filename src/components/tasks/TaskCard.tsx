@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from 'react'
-import { Star } from 'lucide-react'
+import { CircleMinus, Play, Plus } from 'lucide-react'
 import type { DueLabel } from '../../lib/date'
 import type { TaskDoc, TaskId } from '../../lib/domain'
 import type { ColumnKey } from '../../lib/useDragAndDrop'
@@ -34,6 +34,7 @@ function TaskCard({
 }: TaskCardProps) {
   const [isExiting, setIsExiting] = useState(false)
   const draggable = !!onDragStart
+  const isDueToday = dueLabel === 'Due today'
 
   function handleCheck() {
     setIsExiting(true)
@@ -63,33 +64,36 @@ function TaskCard({
       <span className={`min-w-0 flex-1 ${compact ? 'text-xs' : 'text-sm'} text-slate-800 ${isExiting ? 'line-through text-slate-400' : ''}`}>
         {task.title}
       </span>
-      {isCommitment && (
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
-          <Star size={9} className="fill-indigo-500 text-indigo-500" />
-          Focus today
-        </span>
-      )}
       {isCommitment && onStartFocusBlock && (
         <button
           type="button"
           onClick={() => onStartFocusBlock(task)}
-          className="shrink-0 rounded-md border border-indigo-200/80 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+          className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium text-indigo-500 transition-colors hover:bg-indigo-100/70 hover:text-indigo-700"
         >
-          Start focus block
+          <Play size={10} className="fill-current" />
+          Focus
         </button>
       )}
-      {dueLabel && <DueBadge label={dueLabel} />}
-      {showFocusButton && onToggleFocus && (
+      {showFocusButton && onToggleFocus && !isCommitment && (
         <button
           type="button"
           onClick={() => onToggleFocus(task._id)}
-          className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
-            isCommitment
-              ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
-              : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'
-          }`}
+          className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
         >
-          {isCommitment ? 'Unfocus' : 'Focus today'}
+          <Plus size={10} />
+          Focus
+        </button>
+      )}
+      {dueLabel && <DueBadge label={dueLabel} subtle={isCommitment || isDueToday} />}
+      {showFocusButton && onToggleFocus && isCommitment && (
+        <button
+          type="button"
+          onClick={() => onToggleFocus(task._id)}
+          aria-label={`Unfocus ${task.title}`}
+          title="Unfocus"
+          className="inline-flex shrink-0 items-center rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+        >
+          <CircleMinus size={13} />
         </button>
       )}
     </div>

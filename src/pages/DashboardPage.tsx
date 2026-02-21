@@ -6,6 +6,7 @@ import { getRelativeDueLabel, toLocalDateKey } from '../lib/date'
 import type { DailyModel, PlannerSnapshot, TaskDoc, TaskId } from '../lib/domain'
 import type { FocusStartPayload } from '../lib/focusBlockSession'
 import TaskCard from '../components/tasks/TaskCard'
+import DecisionTaskCard from '../components/ritual/DecisionTaskCard'
 import { useDragAndDrop, type ColumnKey } from '../lib/useDragAndDrop'
 
 function DashboardPage() {
@@ -18,13 +19,16 @@ function DashboardPage() {
   }) as DailyModel | undefined
   const markTaskDone = useMutation(api.tasks.markTaskDone)
   const updateTaskDueDate = useMutation(api.tasks.setTaskDueDate)
+  const dropTask = useMutation(api.tasks.dropTask)
   const addCommitment = useMutation(api.daily.addCommitmentForDate)
   const removeCommitment = useMutation(api.daily.removeCommitmentForDate)
 
+  const [overdueOpen, setOverdueOpen] = useState(false)
   const [tomorrowOpen, setTomorrowOpen] = useState(false)
   const [dayAfterOpen, setDayAfterOpen] = useState(false)
   const [focusTarget, setFocusTarget] = useState<{ taskId: TaskId; title: string } | null>(null)
   const [isStartingFocusBlock, setIsStartingFocusBlock] = useState(false)
+  const [moveDateByTaskId, setMoveDateByTaskId] = useState<Record<string, string>>({})
 
   const todayKey = dailyModel?.todayKey ?? ''
 
@@ -81,9 +85,24 @@ function DashboardPage() {
   const commitmentTasks = dailyModel.commitmentTasks.filter((t) => t.status === 'active')
   const commitmentTaskIds = new Set<TaskId>(commitmentTasks.map((t) => t._id))
   const dueTodayWithoutCommitments = planner.todayTasks.filter((t) => !commitmentTaskIds.has(t._id))
+  const overdueTasks = planner.priorTasks.filter((t) => !commitmentTaskIds.has(t._id))
 
   async function handleMarkDone(taskId: TaskId) {
     await markTaskDone({ taskId })
+  }
+
+  async function handleDropTask(taskId: TaskId) {
+    await dropTask({ taskId })
+  }
+
+  async function handleMoveTask(taskId: TaskId, date: string) {
+    const normalizedDate = date.trim()
+    if (!normalizedDate) return
+    await updateTaskDueDate({ taskId, dueDate: normalizedDate })
+  }
+
+  function setMoveDate(taskId: TaskId, date: string) {
+    setMoveDateByTaskId((prev) => ({ ...prev, [taskId]: date }))
   }
 
   function handleToggleFocus(taskId: TaskId) {
@@ -167,6 +186,43 @@ function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Overdue section */}
+        {overdueTasks.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setOverdueOpen(!overdueOpen)}
+              className="flex w-full items-center justify-between rounded-lg border border-amber-200/80 bg-amber-50/40 px-3 py-2.5 text-left text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50/60"
+            >
+              <span className="flex items-center gap-2">
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  OVERDUE
+                </span>
+                <span className="text-amber-700/70">Needs a decision</span>
+              </span>
+              {overdueOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            {overdueOpen && (
+              <div className="rounded-xl border border-amber-100 bg-amber-50/20 p-4">
+                <div className="space-y-2">
+                  {overdueTasks.map((task) => (
+                    <DecisionTaskCard
+                      key={task._id}
+                      task={task}
+                      dueLabel={dueLabelFor(task)}
+                      moveDate={moveDateByTaskId[task._id] ?? planner.todayKey}
+                      onMoveDateChange={setMoveDate}
+                      onMarkDone={handleMarkDone}
+                      onMove={handleMoveTask}
+                      onDrop={handleDropTask}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {/* Due Today block */}
         {dueTodayWithoutCommitments.length > 0 && (

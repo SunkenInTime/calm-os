@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { Check, ArrowRight, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, ArrowRight, X, CalendarDays } from 'lucide-react'
 import type { DueLabel } from '../../lib/date'
+import { formatDateKey } from '../../lib/date'
 import type { TaskDoc, TaskId } from '../../lib/domain'
 import DueBadge from '../tasks/DueBadge'
+import DatePickerPopover from '../tasks/DatePickerPopover'
 
 type DecisionTaskCardProps = {
   task: TaskDoc
@@ -24,6 +26,8 @@ function DecisionTaskCard({
   onDrop,
 }: DecisionTaskCardProps) {
   const [moveState, setMoveState] = useState<'idle' | 'picking'>('idle')
+  const [showCalendar, setShowCalendar] = useState(false)
+  const dateBtnRef = useRef<HTMLButtonElement>(null)
 
   function handleMoveClick() {
     if (moveState === 'idle') {
@@ -34,10 +38,12 @@ function DecisionTaskCard({
   function handleConfirmMove() {
     void onMove(task._id, moveDate)
     setMoveState('idle')
+    setShowCalendar(false)
   }
 
   function handleCancelMove() {
     setMoveState('idle')
+    setShowCalendar(false)
   }
 
   return (
@@ -46,56 +52,79 @@ function DecisionTaskCard({
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-800">{task.title}</p>
           <p className="mt-0.5 text-xs text-slate-400">
-            You didn't get to this today — what's the state of it?
+            What's the state of this?
           </p>
         </div>
-        {dueLabel && <DueBadge label={dueLabel} />}
+        {dueLabel === 'Overdue' ? (
+          <span className="inline-flex shrink-0 items-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase leading-none text-amber-700">
+            OVERDUE
+          </span>
+        ) : (
+          dueLabel && <DueBadge label={dueLabel} />
+        )}
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => void onMarkDone(task._id)}
-          className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-100"
         >
           <Check size={12} />
-          I did it
+          Done
         </button>
         <button
           type="button"
           onClick={handleMoveClick}
           className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
             moveState === 'picking'
-              ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-              : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700'
+              ? 'border-slate-300 bg-slate-100 text-slate-700'
+              : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
           }`}
         >
           <ArrowRight size={12} />
-          Move it
+          Move
         </button>
         <button
           type="button"
           onClick={() => void onDrop(task._id)}
-          className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-100"
         >
           <X size={12} />
-          Drop it
+          Drop
         </button>
       </div>
 
       {moveState === 'picking' && (
-        <div className="mt-2.5 flex items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50/50 px-3 py-2">
+        <div className="mt-2.5 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
           <label className="text-xs text-slate-500">Move to:</label>
-          <input
-            type="date"
-            value={moveDate}
-            onChange={(event) => onMoveDateChange(task._id, event.target.value)}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:border-indigo-300 focus:outline-none"
-          />
+          <div className="relative">
+            <button
+              ref={dateBtnRef}
+              type="button"
+              onClick={() => setShowCalendar((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 text-xs transition-colors ${
+                showCalendar
+                  ? 'border-indigo-300 text-indigo-600'
+                  : 'border-slate-200 text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              <CalendarDays size={12} />
+              {formatDateKey(moveDate)}
+            </button>
+            <DatePickerPopover
+              isOpen={showCalendar}
+              onClose={() => setShowCalendar(false)}
+              onSelect={(dateKey) => onMoveDateChange(task._id, dateKey)}
+              selectedDate={moveDate}
+              anchorRef={dateBtnRef}
+              align="left"
+            />
+          </div>
           <button
             type="button"
             onClick={handleConfirmMove}
-            className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
+            className="rounded-md bg-slate-700 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
           >
             Confirm move
           </button>
