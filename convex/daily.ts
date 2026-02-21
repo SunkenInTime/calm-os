@@ -187,6 +187,14 @@ export const markRitualCompleted = mutation({
       throw new Error("Could not create daily record.");
     }
 
+    if (
+      (args.ritual === "morning" && Boolean(daily.morningCompletedAt)) ||
+      (args.ritual === "evening" && Boolean(daily.eveningCompletedAt)) ||
+      (args.ritual === "reset" && Boolean(daily.resetCompletedAt))
+    ) {
+      return;
+    }
+
     const now = new Date().toISOString();
     const patch: {
       morningCompletedAt?: string;

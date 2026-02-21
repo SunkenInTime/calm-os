@@ -1,8 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatMmSs, getRemainingMs, useFocusBlockSession } from './lib/focusBlockSession'
 
-const dragRegionStyle: CSSProperties = { WebkitAppRegion: 'drag' }
-const noDragRegionStyle: CSSProperties = { WebkitAppRegion: 'no-drag' }
+type AppRegionStyle = CSSProperties & { WebkitAppRegion: 'drag' | 'no-drag' }
+const dragRegionStyle: AppRegionStyle = { WebkitAppRegion: 'drag' }
+const noDragRegionStyle: AppRegionStyle = { WebkitAppRegion: 'no-drag' }
 
 function FocusBlockOverlay() {
   const { session, stop, continueBlock, closeComplete } = useFocusBlockSession()

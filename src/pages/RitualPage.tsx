@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { ArrowLeft, ArrowRight, CornerDownLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -55,6 +55,43 @@ function RitualPage({ kind }: RitualPageProps) {
   const [isFinishing, setIsFinishing] = useState(false)
   const [hasCompletedRitual, setHasCompletedRitual] = useState(false)
   const [moveDateByTaskId, setMoveDateByTaskId] = useState<Record<string, string>>({})
+  const dailyModelRef = useRef<DailyModel | undefined>(undefined)
+  const hasCompletedRitualRef = useRef(false)
+  const completionStartedRef = useRef(false)
+
+  useEffect(() => {
+    dailyModelRef.current = dailyModel
+  }, [dailyModel])
+
+  useEffect(() => {
+    hasCompletedRitualRef.current = hasCompletedRitual
+  }, [hasCompletedRitual])
+
+  const completeRitual = useCallback(
+    async (source: 'finish' | 'unmount') => {
+      const currentDaily = dailyModelRef.current
+      if (!currentDaily || hasCompletedRitualRef.current || completionStartedRef.current) {
+        return
+      }
+
+      completionStartedRef.current = true
+
+      try {
+        await markRitualCompleted({
+          dateKey: currentDaily.todayKey,
+          ritual: kind,
+        })
+        hasCompletedRitualRef.current = true
+        if (source === 'finish') {
+          setHasCompletedRitual(true)
+        }
+      } catch (error) {
+        completionStartedRef.current = false
+        throw error
+      }
+    },
+    [kind, markRitualCompleted],
+  )
 
   useEffect(() => {
     if (!planner || !dailyModel) return
@@ -75,13 +112,9 @@ function RitualPage({ kind }: RitualPageProps) {
 
   useEffect(() => {
     return () => {
-      if (!dailyModel || hasCompletedRitual) return
-      void markRitualCompleted({
-        dateKey: dailyModel.todayKey,
-        ritual: kind,
-      })
+      void completeRitual('unmount').catch(() => undefined)
     }
-  }, [dailyModel, hasCompletedRitual, kind, markRitualCompleted])
+  }, [completeRitual])
 
   if (!planner || !dailyModel) {
     return (
@@ -153,11 +186,7 @@ function RitualPage({ kind }: RitualPageProps) {
           taskIds: selectedCommitmentTaskIds,
         })
       }
-      await markRitualCompleted({
-        dateKey: ritualDateKey,
-        ritual: kind,
-      })
-      setHasCompletedRitual(true)
+      await completeRitual('finish')
       navigate('/')
     } catch {
       setRitualError('Could not save this ritual yet. Please try again.')
