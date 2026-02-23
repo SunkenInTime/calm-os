@@ -29,6 +29,7 @@ function QuickAddOverlay() {
   const createTask = useMutation(api.tasks.createTask)
   const createIdea = useMutation(api.ideas.createIdea)
   const [mode, setMode] = useState<QuickAddMode>('task')
+  const [tabSwitchDirection, setTabSwitchDirection] = useState<'toTask' | 'toIdea' | null>(null)
   const [title, setTitle] = useState('')
   const [resolvedDate, setResolvedDate] = useState<string | null>(null)
   const [referenceUrl, setReferenceUrl] = useState<string | null>(null)
@@ -73,6 +74,18 @@ function QuickAddOverlay() {
   }, [title, mode])
 
   useEffect(() => {
+    if (!tabSwitchDirection) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      setTabSwitchDirection(null)
+    }, 260)
+
+    return () => window.clearTimeout(timeout)
+  }, [tabSwitchDirection])
+
+  useEffect(() => {
     async function readClipboardReference() {
       if (mode !== 'idea') {
         setReferenceUrl(null)
@@ -94,7 +107,11 @@ function QuickAddOverlay() {
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Tab') {
       event.preventDefault()
-      setMode((prev) => (prev === 'idea' ? 'task' : 'idea'))
+      setMode((prev) => {
+        const nextMode = prev === 'idea' ? 'task' : 'idea'
+        setTabSwitchDirection(nextMode === 'idea' ? 'toIdea' : 'toTask')
+        return nextMode
+      })
     }
   }
 
@@ -176,7 +193,13 @@ function QuickAddOverlay() {
     <div className="flex h-screen w-screen items-center justify-center px-6" style={{ background: 'transparent' }}>
       <form
         onSubmit={handleSubmit}
-        className="flex h-14 w-full max-w-[736px] items-center gap-2.5 rounded-[9px] bg-white p-2.5 shadow-[inset_0_4px_4px_rgba(0,0,0,0.25),0_16px_40px_-28px_rgba(15,23,42,0.95)] ring-1 ring-slate-300/80"
+        className={[
+          'flex h-14 w-full max-w-[736px] items-center gap-2.5 rounded-[9px] bg-white p-2.5 shadow-[inset_0_4px_4px_rgba(0,0,0,0.25),0_16px_40px_-28px_rgba(15,23,42,0.95)] ring-1 ring-slate-300/80',
+          tabSwitchDirection === 'toIdea' && 'quick-add-tab-switch quick-add-tab-switch--idea',
+          tabSwitchDirection === 'toTask' && 'quick-add-tab-switch quick-add-tab-switch--task',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         <button
           type="button"
@@ -194,11 +217,15 @@ function QuickAddOverlay() {
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={mode === 'task' ? 'Add a task... A dog takes a walk on monday' : 'Add an idea'}
+          placeholder={
+            mode === 'task'
+              ? 'Add a task (for example: Follow up with Alex tomorrow)'
+              : 'Capture an idea (Tab switches back to tasks)'
+          }
           className="min-w-0 flex-1"
           inputClassName="w-full bg-transparent px-0 py-0 text-[18px] leading-[1.2] text-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           textClassName="px-0 py-0 text-[18px] leading-[1.2] text-slate-900"
-          placeholderClassName="text-[#98a8be]"
+          placeholderClassName="quick-add-placeholder-hint"
           renderOverlayText={renderOverlayText}
           autoFocus
           disabled={isSubmitting}
