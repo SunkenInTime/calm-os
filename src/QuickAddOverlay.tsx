@@ -136,19 +136,17 @@ function QuickAddOverlay() {
     <div className="flex h-screen w-screen items-center justify-center px-6" style={{ background: 'transparent' }}>
       <form
         onSubmit={handleSubmit}
-        className="flex w-full max-w-[920px] items-center rounded-3xl bg-white shadow-2xl ring-1 ring-slate-900/5"
+        className="flex h-14 w-full max-w-[736px] items-center gap-2.5 rounded-[9px] bg-white p-2.5 shadow-[inset_0_4px_4px_rgba(0,0,0,0.25),0_16px_40px_-28px_rgba(15,23,42,0.95)] ring-1 ring-slate-300/80"
       >
         <button
           type="button"
           onClick={() => setMode((prev) => (prev === 'idea' ? 'task' : 'idea'))}
-          className={`ml-3 flex shrink-0 items-center gap-2.5 rounded-2xl px-4 py-2.5 text-base font-medium transition-colors select-none ${mode === 'task'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-slate-100 text-slate-700'
-            }`}
+          className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[#4f39f6] text-white shadow-[0_4px_10px_-4px_rgba(79,57,246,0.9)] transition-colors hover:bg-[#432edf] disabled:cursor-not-allowed disabled:opacity-70"
           tabIndex={-1}
+          disabled={isSubmitting}
+          aria-label={mode === 'task' ? 'Switch to idea mode' : 'Switch to task mode'}
         >
-          {mode === 'task' ? <ListChecks size={18} /> : <Lightbulb size={18} />}
-          {mode === 'task' ? 'Task' : 'Idea'}
+          {mode === 'task' ? <ListChecks size={18} strokeWidth={2.25} /> : <Lightbulb size={18} strokeWidth={2.25} />}
         </button>
 
         <input
@@ -158,21 +156,23 @@ function QuickAddOverlay() {
           onKeyDown={handleKeyDown}
           placeholder={
             mode === 'task'
-              ? 'Add a task... (TD, TM, MON-SUN for date)'
-              : 'Capture an idea...'
+              ? 'Add a task... A dog takes a walk on monday'
+              : 'Add an idea'
           }
-          className="min-w-0 flex-1 bg-transparent px-5 py-5 text-lg text-slate-800 placeholder:text-slate-400 focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent px-0 py-0 text-[18px] leading-[1.2] text-slate-900 placeholder:text-[#98a8be] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           autoFocus
+          disabled={isSubmitting}
         />
 
         {mode === 'task' && dateLabel && (
-          <span className="mr-3 flex shrink-0 items-center gap-1.5 rounded-xl bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700">
-            {dateLabel}
+          <span className="mr-0.5 flex shrink-0 items-center gap-1 text-xs font-medium text-[#4f39f6]">
+            <span>{dateLabel}</span>
             <button
               type="button"
               onClick={clearDate}
-              className="rounded-full p-0.5 hover:bg-indigo-200"
+              className="rounded-sm p-0.5 text-[#4f39f6] transition-colors hover:bg-[#ede9ff]"
               tabIndex={-1}
+              aria-label="Clear due date"
             >
               <X size={13} />
             </button>
@@ -180,18 +180,21 @@ function QuickAddOverlay() {
         )}
 
         {mode === 'idea' && referenceUrl && (
-          <span className="mr-3 flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
-            <Link size={13} />
-            <span className="max-w-[260px] truncate">{referenceUrl}</span>
-            <button
-              type="button"
-              onClick={() => setReferenceUrl(null)}
-              className="rounded-full p-0.5 hover:bg-slate-200"
-              tabIndex={-1}
-            >
-              <X size={13} />
-            </button>
-          </span>
+          <button
+            type="button"
+            onClick={() => setReferenceUrl(null)}
+            className="group relative flex size-6 shrink-0 items-center justify-center rounded-sm text-[#4f39f6] transition-colors hover:bg-slate-100"
+            tabIndex={-1}
+            aria-label="Remove link from clipboard"
+            title={referenceUrl}
+          >
+            <span className="flex items-center justify-center transition-opacity group-hover:opacity-0">
+              <Link size={18} />
+            </span>
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+              <X size={18} />
+            </span>
+          </button>
         )}
       </form>
     </div>
