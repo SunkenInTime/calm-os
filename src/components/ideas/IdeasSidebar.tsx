@@ -4,6 +4,7 @@ import { Ellipsis, Link2, Plus } from 'lucide-react'
 import { api } from '../../../convex/_generated/api'
 import { toLocalDateKey } from '../../lib/date'
 import type { IdeaDoc } from '../../lib/domain'
+import AnimatedCaretInput from '../AnimatedCaretInput'
 
 function IdeasSidebar() {
   const ideas = useQuery(api.ideas.listIdeas) as IdeaDoc[] | undefined
@@ -139,11 +140,14 @@ function IdeasSidebar() {
       </div>
 
       <form onSubmit={handleAdd} className="mt-3 flex gap-1.5">
-        <input
+        <AnimatedCaretInput
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(event) => setTitle(event.target.value)}
           placeholder="Add idea..."
-          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none"
+          className="min-w-0 flex-1"
+          inputClassName="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-indigo-300 focus:outline-none"
+          textClassName="pl-2.5 py-1.5 text-xs text-slate-700"
+          placeholderClassName="text-slate-400"
         />
         <button
           type="submit"

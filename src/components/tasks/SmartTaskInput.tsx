@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, X } from 'lucide-react'
 import { parseDateAlias, stripAlias, type ParsedAlias } from '../../lib/dateAliases'
 import { formatDateKey } from '../../lib/date'
+import AnimatedCaretInput from '../AnimatedCaretInput'
 import DatePickerPopover from './DatePickerPopover'
 
 type SmartTaskInputProps = {
@@ -91,12 +92,14 @@ function SmartTaskInput({
   return (
     <div className={`relative flex items-center ${className}`}>
       <div className="relative flex min-w-0 flex-1 items-center">
-        <input
-          ref={inputCallbackRef}
+        <AnimatedCaretInput
+          inputRef={inputCallbackRef}
           value={value}
-          onChange={(e) => handleChange(e.target.value)}
+          onChange={(event) => handleChange(event.target.value)}
           placeholder={placeholder}
-          className={`w-full rounded-lg border border-slate-200 bg-slate-50 pr-24 text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none ${compact ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'}`}
+          inputClassName={`w-full rounded-lg border border-slate-200 bg-slate-50 pr-24 text-slate-800 focus:border-indigo-400 focus:outline-none ${compact ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'}`}
+          textClassName={`${compact ? 'pl-2.5 py-1.5 text-xs' : 'pl-3 py-2 text-sm'} text-slate-800`}
+          placeholderClassName="text-slate-400"
         />
 
         {/* Alias highlight overlay */}

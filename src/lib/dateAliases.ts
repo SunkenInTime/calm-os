@@ -61,22 +61,27 @@ function resolveAlias(alias: string): { dateKey: string; label: string } {
 }
 
 export function parseDateAlias(input: string): ParsedAlias | null {
-  let lastMatch: ParsedAlias | null = null
+  const matches = findDateAliasMatches(input)
+  return matches.length > 0 ? matches[matches.length - 1] : null
+}
+
+export function findDateAliasMatches(input: string): ParsedAlias[] {
+  const matches: ParsedAlias[] = []
   let match: RegExpExecArray | null
 
   ALIAS_PATTERN.lastIndex = 0
   while ((match = ALIAS_PATTERN.exec(input)) !== null) {
     const { dateKey, label } = resolveAlias(match[1])
-    lastMatch = {
+    matches.push({
       alias: match[1],
       dateKey,
       label,
       startIndex: match.index,
       endIndex: match.index + match[1].length,
-    }
+    })
   }
 
-  return lastMatch
+  return matches
 }
 
 export function stripAlias(input: string, alias: ParsedAlias): string {

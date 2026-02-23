@@ -2,6 +2,7 @@ import { FormEvent, useState, type DragEvent } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { ChevronDown, ChevronUp, Link, Plus, Trash2 } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
+import AnimatedCaretInput from '../components/AnimatedCaretInput'
 import type { IdeaDoc } from '../lib/domain'
 
 function IdeasPage() {
@@ -95,11 +96,13 @@ function IdeasPage() {
             <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
               <Plus size={13} className="text-slate-400" />
             </div>
-            <input
+            <AnimatedCaretInput
               value={ideaTitle}
-              onChange={(e) => setIdeaTitle(e.target.value)}
+              onChange={(event) => setIdeaTitle(event.target.value)}
               placeholder="What's on your mind..."
-              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none"
+              inputClassName="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 focus:border-indigo-300 focus:outline-none"
+              textClassName="py-2 pl-8 text-sm text-slate-700"
+              placeholderClassName="text-slate-400"
             />
           </div>
           <button

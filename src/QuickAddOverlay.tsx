@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation } from 'convex/react'
 import { Lightbulb, Link, ListChecks, X } from 'lucide-react'
 import { api } from '../convex/_generated/api'
-import { parseDateAlias, stripAlias } from './lib/dateAliases'
+import { findDateAliasMatches, parseDateAlias, stripAlias } from './lib/dateAliases'
 import { formatDateKey } from './lib/date'
+import AnimatedCaretInput from './components/AnimatedCaretInput'
 
 type QuickAddMode = 'idea' | 'task'
 
@@ -131,6 +132,45 @@ function QuickAddOverlay() {
   }
 
   const dateLabel = resolvedDate ? formatDateKey(resolvedDate) : null
+  const renderOverlayText = useCallback(
+    (text: string) => {
+      if (mode !== 'task' || text.length === 0) {
+        return text
+      }
+
+      const aliasMatches = findDateAliasMatches(text)
+      if (aliasMatches.length === 0) {
+        return text
+      }
+
+      const nodes: React.ReactNode[] = []
+      let cursor = 0
+
+      aliasMatches.forEach((match, index) => {
+        if (match.startIndex > cursor) {
+          nodes.push(
+            <span key={`plain-${index}-${cursor}`}>
+              {text.slice(cursor, match.startIndex)}
+            </span>,
+          )
+        }
+
+        nodes.push(
+          <span key={`alias-${index}-${match.startIndex}`} className="quick-add-keyword-highlight">
+            {text.slice(match.startIndex, match.endIndex)}
+          </span>,
+        )
+        cursor = match.endIndex
+      })
+
+      if (cursor < text.length) {
+        nodes.push(<span key={`plain-tail-${cursor}`}>{text.slice(cursor)}</span>)
+      }
+
+      return nodes
+    },
+    [mode],
+  )
 
   return (
     <div className="flex h-screen w-screen items-center justify-center px-6" style={{ background: 'transparent' }}>
@@ -141,7 +181,7 @@ function QuickAddOverlay() {
         <button
           type="button"
           onClick={() => setMode((prev) => (prev === 'idea' ? 'task' : 'idea'))}
-          className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[#4f39f6] text-white shadow-[0_4px_10px_-4px_rgba(79,57,246,0.9)] transition-colors hover:bg-[#432edf] disabled:cursor-not-allowed disabled:opacity-70"
+          className="input-affordance flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[#4f39f6] text-white shadow-[0_4px_10px_-4px_rgba(79,57,246,0.9)] transition-colors hover:bg-[#432edf] disabled:cursor-not-allowed disabled:opacity-70"
           tabIndex={-1}
           disabled={isSubmitting}
           aria-label={mode === 'task' ? 'Switch to idea mode' : 'Switch to task mode'}
@@ -149,17 +189,17 @@ function QuickAddOverlay() {
           {mode === 'task' ? <ListChecks size={18} strokeWidth={2.25} /> : <Lightbulb size={18} strokeWidth={2.25} />}
         </button>
 
-        <input
-          ref={inputRef}
+        <AnimatedCaretInput
+          inputRef={inputRef}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(event) => setTitle(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            mode === 'task'
-              ? 'Add a task... A dog takes a walk on monday'
-              : 'Add an idea'
-          }
-          className="min-w-0 flex-1 bg-transparent px-0 py-0 text-[18px] leading-[1.2] text-slate-900 placeholder:text-[#98a8be] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          placeholder={mode === 'task' ? 'Add a task... A dog takes a walk on monday' : 'Add an idea'}
+          className="min-w-0 flex-1"
+          inputClassName="w-full bg-transparent px-0 py-0 text-[18px] leading-[1.2] text-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          textClassName="px-0 py-0 text-[18px] leading-[1.2] text-slate-900"
+          placeholderClassName="text-[#98a8be]"
+          renderOverlayText={renderOverlayText}
           autoFocus
           disabled={isSubmitting}
         />
@@ -170,7 +210,7 @@ function QuickAddOverlay() {
             <button
               type="button"
               onClick={clearDate}
-              className="rounded-sm p-0.5 text-[#4f39f6] transition-colors hover:bg-[#ede9ff]"
+              className="input-affordance rounded-sm p-0.5 text-[#4f39f6] transition-colors hover:bg-[#ede9ff]"
               tabIndex={-1}
               aria-label="Clear due date"
             >
@@ -183,7 +223,7 @@ function QuickAddOverlay() {
           <button
             type="button"
             onClick={() => setReferenceUrl(null)}
-            className="group relative flex size-6 shrink-0 items-center justify-center rounded-sm text-[#4f39f6] transition-colors hover:bg-slate-100"
+            className="input-affordance group relative flex size-6 shrink-0 items-center justify-center rounded-sm text-[#4f39f6] transition-colors hover:bg-slate-100"
             tabIndex={-1}
             aria-label="Remove link from clipboard"
             title={referenceUrl}
