@@ -4,7 +4,11 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import { getRelativeDueLabel, toLocalDateKey } from '../lib/date'
 import type { DailyModel, PlannerSnapshot, TaskDoc, TaskId } from '../lib/domain'
-import type { FocusStartPayload } from '../lib/focusBlockSession'
+import {
+  DEFAULT_SESSION_LENGTH_MINUTES,
+  type FocusStartPayload,
+  useFocusBlockSession,
+} from '../lib/focusBlockSession'
 import TaskCard from '../components/tasks/TaskCard'
 import DecisionTaskCard from '../components/ritual/DecisionTaskCard'
 import { useDragAndDrop, type ColumnKey } from '../lib/useDragAndDrop'
@@ -22,15 +26,23 @@ function DashboardPage() {
   const dropTask = useMutation(api.tasks.dropTask)
   const addCommitment = useMutation(api.daily.addCommitmentForDate)
   const removeCommitment = useMutation(api.daily.removeCommitmentForDate)
+  const { session } = useFocusBlockSession()
 
   const [overdueOpen, setOverdueOpen] = useState(false)
   const [tomorrowOpen, setTomorrowOpen] = useState(false)
   const [dayAfterOpen, setDayAfterOpen] = useState(false)
-  const [focusTarget, setFocusTarget] = useState<{ taskId: TaskId; title: string } | null>(null)
+  const [focusTarget, setFocusTarget] = useState<{
+    taskId: TaskId
+    title: string
+    sessionLengthMinutes: number
+  } | null>(null)
   const [isStartingFocusBlock, setIsStartingFocusBlock] = useState(false)
   const [moveDateByTaskId, setMoveDateByTaskId] = useState<Record<string, string>>({})
 
   const todayKey = dailyModel?.todayKey ?? ''
+  const activeFocusTaskId =
+    session.status === 'running' && session.commitmentId ? (session.commitmentId as TaskId) : null
+  const isFocusSessionRunning = session.status === 'running'
 
   const handleDrop = useCallback(
     (taskId: TaskId, sourceColumn: ColumnKey, targetColumn: ColumnKey) => {
@@ -115,9 +127,16 @@ function DashboardPage() {
 
   function handleRequestStartFocus(task: TaskDoc) {
     if (!commitmentTaskIds.has(task._id)) return
+    if (isFocusSessionRunning) {
+      if (activeFocusTaskId === task._id) {
+        return
+      }
+      return
+    }
     setFocusTarget({
       taskId: task._id,
       title: task.title,
+      sessionLengthMinutes: task.sessionLengthMinutes ?? DEFAULT_SESSION_LENGTH_MINUTES,
     })
   }
 
@@ -129,6 +148,7 @@ function DashboardPage() {
         source: 'commitment-card',
         commitmentId: focusTarget.taskId,
         commitmentTitle: focusTarget.title,
+        sessionLengthMinutes: focusTarget.sessionLengthMinutes,
       }
       await window.ipcRenderer?.invoke?.('focus:start', payload)
       setFocusTarget(null)
@@ -175,6 +195,8 @@ function DashboardPage() {
                     dueLabel={dueLabelFor(task)}
                     isCommitment
                     showFocusButton
+                    isActivelyFocused={activeFocusTaskId === task._id}
+                    isAnotherTaskFocused={isFocusSessionRunning}
                     onMarkDone={handleMarkDone}
                     onToggleFocus={handleToggleFocus}
                     onStartFocusBlock={handleRequestStartFocus}
@@ -247,6 +269,8 @@ function DashboardPage() {
                   columnKey="today"
                   dueLabel={dueLabelFor(task)}
                   showFocusButton
+                  isActivelyFocused={activeFocusTaskId === task._id}
+                  isAnotherTaskFocused={isFocusSessionRunning}
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
                   onStartFocusBlock={handleRequestStartFocus}
@@ -287,6 +311,8 @@ function DashboardPage() {
                   dueLabel={dueLabelFor(task)}
                   showFocusButton
                   isCommitment={commitmentTaskIds.has(task._id)}
+                  isActivelyFocused={activeFocusTaskId === task._id}
+                  isAnotherTaskFocused={isFocusSessionRunning}
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
                   onStartFocusBlock={handleRequestStartFocus}
@@ -309,6 +335,8 @@ function DashboardPage() {
                   dueLabel={dueLabelFor(task)}
                   showFocusButton
                   isCommitment={commitmentTaskIds.has(task._id)}
+                  isActivelyFocused={activeFocusTaskId === task._id}
+                  isAnotherTaskFocused={isFocusSessionRunning}
                   onMarkDone={handleMarkDone}
                   onToggleFocus={handleToggleFocus}
                   onStartFocusBlock={handleRequestStartFocus}
@@ -328,6 +356,8 @@ function DashboardPage() {
             onMarkDone={handleMarkDone}
             onToggleFocus={handleToggleFocus}
             onStartFocusBlock={handleRequestStartFocus}
+            activeFocusTaskId={activeFocusTaskId}
+            isFocusSessionRunning={isFocusSessionRunning}
           />
         )}
         {focusTarget && (
@@ -335,7 +365,7 @@ function DashboardPage() {
             <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
               <h3 className="text-sm font-semibold text-slate-800">Start focus block?</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Attach a 25-minute focus block to:
+                Start a {focusTarget.sessionLengthMinutes}m session for:
               </p>
               <p className="mt-2 rounded-md bg-indigo-50 px-2.5 py-2 text-sm font-medium text-indigo-700">
                 {focusTarget.title}
@@ -399,6 +429,8 @@ function UnscheduledLink({
   onMarkDone,
   onToggleFocus,
   onStartFocusBlock,
+  activeFocusTaskId,
+  isFocusSessionRunning,
 }: {
   count: number
   tasks: TaskDoc[]
@@ -407,6 +439,8 @@ function UnscheduledLink({
   onMarkDone: (taskId: TaskId) => Promise<void>
   onToggleFocus: (taskId: TaskId) => void
   onStartFocusBlock: (task: TaskDoc) => void
+  activeFocusTaskId: TaskId | null
+  isFocusSessionRunning: boolean
 }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -431,6 +465,8 @@ function UnscheduledLink({
                 dueLabel={getRelativeDueLabel(task.dueDate, todayKey)}
                 isCommitment={commitmentTaskIds.has(task._id)}
                 showFocusButton
+                isActivelyFocused={activeFocusTaskId === task._id}
+                isAnotherTaskFocused={isFocusSessionRunning}
                 onMarkDone={onMarkDone}
                 onToggleFocus={onToggleFocus}
                 onStartFocusBlock={onStartFocusBlock}

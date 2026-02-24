@@ -30,7 +30,9 @@ let tray: Tray | null = null
 let isQuitting = false
 let focusInterval: NodeJS.Timeout | null = null
 
-const FOCUS_BLOCK_DURATION_MS = 25 * 60 * 1000
+const DEFAULT_SESSION_LENGTH_MINUTES = 25
+const MAX_SESSION_LENGTH_MINUTES = 480
+const DEFAULT_EXTENSION_MINUTES = 15
 
 type FocusStatus = 'idle' | 'running' | 'complete'
 
@@ -38,6 +40,7 @@ type FocusSessionState = {
   status: FocusStatus
   commitmentId: string | null
   commitmentTitle: string | null
+  sessionLengthMinutes: number | null
   startedAt: number | null
   endsAt: number | null
 }
@@ -47,6 +50,7 @@ function createIdleFocusSession(): FocusSessionState {
     status: 'idle',
     commitmentId: null,
     commitmentTitle: null,
+    sessionLengthMinutes: null,
     startedAt: null,
     endsAt: null,
   }
@@ -243,8 +247,8 @@ function createFocusWindow() {
   }
 
   focusWindow = new BrowserWindow({
-    width: 360,
-    height: 64,
+    width: 144,
+    height: 144,
     show: false,
     frame: false,
     resizable: false,
@@ -276,15 +280,22 @@ function createFocusWindow() {
   return focusWindow
 }
 
+function getFocusWindowSize() {
+  if (focusSession.status === 'complete') {
+    return { width: 320, height: 196 }
+  }
+  return { width: 144, height: 144 }
+}
+
 function showFocusWindow() {
   const window = createFocusWindow()
-  const windowWidth = 360
-  const windowHeight = 64
+  const { width: windowWidth, height: windowHeight } = getFocusWindowSize()
   const cursorPoint = screen.getCursorScreenPoint()
   const { workArea } = screen.getDisplayNearestPoint(cursorPoint)
   const x = Math.round(workArea.x + workArea.width - windowWidth - 24)
   const y = Math.round(workArea.y + workArea.height - windowHeight - 24)
 
+  window.setSize(windowWidth, windowHeight, false)
   window.setPosition(x, y)
   window.showInactive()
 }
@@ -336,14 +347,32 @@ function runFocusInterval() {
   }, 1000)
 }
 
-function startFocusSession(commitmentId: string, commitmentTitle: string) {
+function resolveSessionLengthMinutes(input: unknown) {
+  if (
+    typeof input !== 'number' ||
+    !Number.isInteger(input) ||
+    input < 1 ||
+    input > MAX_SESSION_LENGTH_MINUTES
+  ) {
+    return DEFAULT_SESSION_LENGTH_MINUTES
+  }
+  return input
+}
+
+function startFocusSession(
+  commitmentId: string,
+  commitmentTitle: string,
+  sessionLengthMinutes: number,
+) {
   const now = Date.now()
+  const safeSessionLengthMinutes = resolveSessionLengthMinutes(sessionLengthMinutes)
   focusSession = {
     status: 'running',
     commitmentId,
     commitmentTitle,
+    sessionLengthMinutes: safeSessionLengthMinutes,
     startedAt: now,
-    endsAt: now + FOCUS_BLOCK_DURATION_MS,
+    endsAt: now + safeSessionLengthMinutes * 60 * 1000,
   }
   showFocusWindow()
   runFocusInterval()
@@ -361,7 +390,37 @@ function continueFocusSession() {
   if (!focusSession.commitmentId || !focusSession.commitmentTitle) {
     return false
   }
-  startFocusSession(focusSession.commitmentId, focusSession.commitmentTitle)
+  startFocusSession(
+    focusSession.commitmentId,
+    focusSession.commitmentTitle,
+    focusSession.sessionLengthMinutes ?? DEFAULT_SESSION_LENGTH_MINUTES,
+  )
+  return true
+}
+
+function extendFocusSession(extensionMinutes: number) {
+  if (!focusSession.commitmentId || !focusSession.commitmentTitle) {
+    return false
+  }
+
+  const safeExtensionMinutes = resolveSessionLengthMinutes(extensionMinutes)
+  const now = Date.now()
+  const nextEndsAt = Math.max(now, focusSession.endsAt ?? now) + safeExtensionMinutes * 60 * 1000
+  const nextStartedAt = focusSession.startedAt ?? now
+  const nextSessionLengthMinutes =
+    (focusSession.sessionLengthMinutes ?? DEFAULT_SESSION_LENGTH_MINUTES) + safeExtensionMinutes
+
+  focusSession = {
+    status: 'running',
+    commitmentId: focusSession.commitmentId,
+    commitmentTitle: focusSession.commitmentTitle,
+    sessionLengthMinutes: nextSessionLengthMinutes,
+    startedAt: nextStartedAt,
+    endsAt: nextEndsAt,
+  }
+  showFocusWindow()
+  runFocusInterval()
+  emitFocusState()
   return true
 }
 
@@ -419,7 +478,12 @@ ipcMain.handle(
   'focus:start',
   (
     _event,
-    payload: { source?: string; commitmentId?: string; commitmentTitle?: string } | null,
+    payload: {
+      source?: string
+      commitmentId?: string
+      commitmentTitle?: string
+      sessionLengthMinutes?: number
+    } | null,
   ) => {
     if (!payload || payload.source !== 'commitment-card') {
       return { ok: false }
@@ -433,7 +497,8 @@ ipcMain.handle(
       return { ok: false }
     }
 
-    startFocusSession(commitmentId, commitmentTitle)
+    const sessionLengthMinutes = resolveSessionLengthMinutes(payload.sessionLengthMinutes)
+    startFocusSession(commitmentId, commitmentTitle, sessionLengthMinutes)
     return { ok: true }
   },
 )
@@ -454,6 +519,22 @@ ipcMain.handle('focus:close-complete', () => {
   stopFocusSession()
   return { ok: true }
 })
+
+ipcMain.handle(
+  'focus:extend',
+  (
+    _event,
+    payload: {
+      minutes?: number
+    } | null,
+  ) => {
+    const requestedMinutes = payload?.minutes
+    const extensionMinutes =
+      typeof requestedMinutes === 'number' ? requestedMinutes : DEFAULT_EXTENSION_MINUTES
+    const ok = extendFocusSession(extensionMinutes)
+    return { ok }
+  },
+)
 
 ipcMain.handle('shell:open-external-url', async (_event, rawUrl: string) => {
   const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : ''

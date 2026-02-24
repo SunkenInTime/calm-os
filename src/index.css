@@ -237,6 +237,64 @@ body.quick-add-mode #root {
   background-color: var(--indigo-a2);
 }
 
+.focus-widget-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  border-radius: 999px;
+  border: 1px solid hsl(220 14% 90%);
+  background: hsl(210 33% 98% / 0.94);
+  color: hsl(218 12% 45%);
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.focus-widget-control-btn:hover {
+  background: hsl(226 70% 96%);
+  border-color: hsl(228 58% 88%);
+  color: hsl(232 72% 58%);
+  transform: translateY(-1px);
+}
+
+@keyframes focus-complete-pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes focus-complete-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.focus-complete-shell {
+  animation: focus-complete-pulse 420ms cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+.focus-complete-ring {
+  transition: stroke-dashoffset 260ms linear;
+}
+
+.focus-complete-check {
+  animation: focus-complete-check 260ms ease-out 1;
+}
+
 /* ─── Date Picker ─── */
 
 @keyframes cal-enter {
@@ -299,4 +357,16 @@ body.quick-add-mode #root {
 .calm-datepicker-today-btn:hover {
   background-color: hsl(220 16% 93%);
   color: hsl(220 14% 38%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-complete-shell,
+  .focus-complete-check {
+    animation: none;
+  }
+
+  .focus-widget-control-btn,
+  .focus-complete-ring {
+    transition: none;
+  }
 }

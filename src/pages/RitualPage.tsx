@@ -163,9 +163,13 @@ function RitualPage({ kind }: RitualPageProps) {
   }
 
   async function handleQuickAddTask() {
-    const cleanTitle = quickAdd.getCleanTitle()
-    if (!cleanTitle) return
-    await createTask({ title: cleanTitle, dueDate: quickAdd.resolvedDate })
+    const taskDraft = quickAdd.getTaskDraft()
+    if (!taskDraft.title) return
+    await createTask({
+      title: taskDraft.title,
+      dueDate: taskDraft.dueDate,
+      sessionLengthMinutes: taskDraft.sessionLengthMinutes ?? undefined,
+    })
     quickAdd.reset()
   }
 
@@ -221,7 +225,7 @@ function RitualPage({ kind }: RitualPageProps) {
     const dueDate = scheduleForToday ? planner!.todayKey : null
     try {
       setIdeaActionPendingId(idea._id)
-      await createTask({ title: idea.title, dueDate })
+      await createTask({ title: idea.title, dueDate, sessionLengthMinutes: undefined })
       await archiveIdea({ ideaId: idea._id })
       setSchedulePromptIdeaId(null)
       showIdeaToast('Idea promoted to task.')
@@ -455,7 +459,7 @@ function RitualPage({ kind }: RitualPageProps) {
                 onChange={quickAdd.setTitle}
                 resolvedDate={quickAdd.resolvedDate}
                 onResolvedDate={quickAdd.setResolvedDate}
-                placeholder="Add a task... (try TD, TM, MON-SUN)"
+                placeholder="Add a task... (try TD/TM + 1h or 45m)"
                 className="min-w-0 flex-1"
               />
               <button
@@ -773,7 +777,7 @@ function RitualPage({ kind }: RitualPageProps) {
             onChange={quickAdd.setTitle}
             resolvedDate={quickAdd.resolvedDate}
             onResolvedDate={quickAdd.setResolvedDate}
-            placeholder="Add a task... (try TD, TM, MON-SUN)"
+            placeholder="Add a task... (try TD/TM + 1h or 45m)"
             className="min-w-0 flex-1"
           />
           <button

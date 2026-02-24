@@ -52,6 +52,20 @@ function normalizeDueDate(input: string | null | undefined): string | null {
   return toLocalDateKey(parsed);
 }
 
+function normalizeSessionLengthMinutes(
+  input: number | undefined,
+): number | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isInteger(input) || input < 1 || input > 480) {
+    throw new Error("Session length must be an integer between 1 and 480.");
+  }
+
+  return input;
+}
+
 function dateKeyFromIso(isoString: string | undefined): string | null {
   if (!isoString) {
     return null;
@@ -105,6 +119,7 @@ export const createTask = mutation({
   args: {
     title: v.string(),
     dueDate: v.optional(v.union(v.string(), v.null())),
+    sessionLengthMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const title = args.title.trim();
@@ -114,10 +129,14 @@ export const createTask = mutation({
 
     const now = new Date().toISOString();
     const dueDate = normalizeDueDate(args.dueDate ?? null);
+    const sessionLengthMinutes = normalizeSessionLengthMinutes(
+      args.sessionLengthMinutes,
+    );
 
     return await ctx.db.insert("tasks", {
       title,
       dueDate,
+      ...(sessionLengthMinutes !== undefined ? { sessionLengthMinutes } : {}),
       status: "active",
       createdAt: now,
       updatedAt: now,
@@ -130,6 +149,7 @@ export const updateTask = mutation({
     taskId: v.id("tasks"),
     title: v.optional(v.string()),
     dueDate: v.optional(v.union(v.string(), v.null())),
+    sessionLengthMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -140,6 +160,7 @@ export const updateTask = mutation({
     const patch: {
       title?: string;
       dueDate?: string | null;
+      sessionLengthMinutes?: number;
       updatedAt: string;
     } = { updatedAt: new Date().toISOString() };
 
@@ -153,6 +174,12 @@ export const updateTask = mutation({
 
     if (args.dueDate !== undefined) {
       patch.dueDate = normalizeDueDate(args.dueDate);
+    }
+
+    if (args.sessionLengthMinutes !== undefined) {
+      patch.sessionLengthMinutes = normalizeSessionLengthMinutes(
+        args.sessionLengthMinutes,
+      );
     }
 
     await ctx.db.patch(args.taskId, patch);

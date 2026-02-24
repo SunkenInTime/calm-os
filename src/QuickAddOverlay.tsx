@@ -4,6 +4,7 @@ import { Lightbulb, Link, ListChecks, X } from 'lucide-react'
 import { api } from '../convex/_generated/api'
 import { findDateAliasMatches, parseDateAlias, stripAlias } from './lib/dateAliases'
 import { formatDateKey } from './lib/date'
+import { extractSessionDuration, findSessionDurationMatches } from './lib/sessionDuration'
 import AnimatedCaretInput from './components/AnimatedCaretInput'
 
 type QuickAddMode = 'idea' | 'task'
@@ -124,9 +125,17 @@ function QuickAddOverlay() {
       setIsSubmitting(true)
       if (mode === 'task') {
         const alias = parseDateAlias(trimmed)
-        const cleanTitle = alias ? stripAlias(trimmed, alias) : trimmed
+        const withoutAlias = alias ? stripAlias(trimmed, alias) : trimmed
+        const { cleanTitle, sessionLengthMinutes } = extractSessionDuration(withoutAlias)
+        if (!cleanTitle) {
+          return
+        }
         const submitDueDate = alias ? alias.dateKey : resolvedDate
-        await createTask({ title: cleanTitle, dueDate: submitDueDate })
+        await createTask({
+          title: cleanTitle,
+          dueDate: submitDueDate,
+          sessionLengthMinutes: sessionLengthMinutes ?? undefined,
+        })
       } else {
         await createIdea({ title: trimmed, referenceUrl: referenceUrl ?? undefined })
       }
@@ -155,15 +164,30 @@ function QuickAddOverlay() {
         return text
       }
 
-      const aliasMatches = findDateAliasMatches(text)
-      if (aliasMatches.length === 0) {
+      const aliasMatches = findDateAliasMatches(text).map((match) => ({
+        startIndex: match.startIndex,
+        endIndex: match.endIndex,
+      }))
+      const durationMatches = findSessionDurationMatches(text).map((match) => ({
+        startIndex: match.startIndex,
+        endIndex: match.endIndex,
+      }))
+      const keywordMatches = [...aliasMatches, ...durationMatches].sort(
+        (a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex,
+      )
+
+      if (keywordMatches.length === 0) {
         return text
       }
 
       const nodes: React.ReactNode[] = []
       let cursor = 0
 
-      aliasMatches.forEach((match, index) => {
+      keywordMatches.forEach((match, index) => {
+        if (match.startIndex < cursor) {
+          return
+        }
+
         if (match.startIndex > cursor) {
           nodes.push(
             <span key={`plain-${index}-${cursor}`}>
@@ -219,7 +243,7 @@ function QuickAddOverlay() {
           onKeyDown={handleKeyDown}
           placeholder={
             mode === 'task'
-              ? 'Add a task (for example: Follow up with Alex tomorrow)'
+              ? 'Add a task (for example: Deep work 90m tomorrow)'
               : 'Capture an idea (Tab switches back to tasks)'
           }
           className="min-w-0 flex-1"

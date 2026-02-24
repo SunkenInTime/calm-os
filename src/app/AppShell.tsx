@@ -20,8 +20,16 @@ function AppShell() {
   const createTask = useMutation(api.tasks.createTask)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
 
-  async function handleCreateTask(title: string, dueDate: string | null) {
-    await createTask({ title, dueDate })
+  async function handleCreateTask(
+    title: string,
+    dueDate: string | null,
+    sessionLengthMinutes: number | null,
+  ) {
+    await createTask({
+      title,
+      dueDate,
+      sessionLengthMinutes: sessionLengthMinutes ?? undefined,
+    })
   }
 
   const isToday = location.pathname === '/'

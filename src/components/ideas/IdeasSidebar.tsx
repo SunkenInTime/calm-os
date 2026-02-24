@@ -97,7 +97,7 @@ function IdeasSidebar() {
     const dueDate = scheduleForToday ? toLocalDateKey(new Date()) : null
     try {
       setPendingActionIdeaId(idea._id)
-      await createTask({ title: idea.title, dueDate })
+      await createTask({ title: idea.title, dueDate, sessionLengthMinutes: undefined })
       await archiveWithFade(idea._id)
       setOpenIdeaId(null)
       setOpenMenuIdeaId(null)

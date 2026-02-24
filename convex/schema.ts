@@ -5,6 +5,7 @@ export default defineSchema({
   tasks: defineTable({
     title: v.string(),
     dueDate: v.union(v.string(), v.null()),
+    sessionLengthMinutes: v.optional(v.number()),
     status: v.union(v.literal("active"), v.literal("done"), v.literal("dropped")),
     createdAt: v.string(),
     updatedAt: v.string(),

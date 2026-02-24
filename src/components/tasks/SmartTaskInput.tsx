@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, X } from 'lucide-react'
-import { parseDateAlias, stripAlias, type ParsedAlias } from '../../lib/dateAliases'
+import { findDateAliasMatches, parseDateAlias, stripAlias, type ParsedAlias } from '../../lib/dateAliases'
 import { formatDateKey } from '../../lib/date'
+import { findSessionDurationMatches } from '../../lib/sessionDuration'
 import AnimatedCaretInput from '../AnimatedCaretInput'
 import DatePickerPopover from './DatePickerPopover'
 
@@ -88,6 +89,53 @@ function SmartTaskInput({
       ? alias.label
       : formatDateKey(resolvedDate)
     : null
+  const renderOverlayText = useCallback((text: string) => {
+    if (text.length === 0) {
+      return text
+    }
+
+    const dateMatches = findDateAliasMatches(text).map((match) => ({
+      startIndex: match.startIndex,
+      endIndex: match.endIndex,
+    }))
+    const durationMatches = findSessionDurationMatches(text).map((match) => ({
+      startIndex: match.startIndex,
+      endIndex: match.endIndex,
+    }))
+    const keywordMatches = [...dateMatches, ...durationMatches].sort(
+      (a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex,
+    )
+
+    if (keywordMatches.length === 0) {
+      return text
+    }
+
+    const nodes: React.ReactNode[] = []
+    let cursor = 0
+
+    keywordMatches.forEach((match, index) => {
+      if (match.startIndex < cursor) {
+        return
+      }
+
+      if (match.startIndex > cursor) {
+        nodes.push(<span key={`plain-${index}-${cursor}`}>{text.slice(cursor, match.startIndex)}</span>)
+      }
+
+      nodes.push(
+        <span key={`keyword-${index}-${match.startIndex}`} className="quick-add-keyword-highlight">
+          {text.slice(match.startIndex, match.endIndex)}
+        </span>,
+      )
+      cursor = match.endIndex
+    })
+
+    if (cursor < text.length) {
+      nodes.push(<span key={`plain-tail-${cursor}`}>{text.slice(cursor)}</span>)
+    }
+
+    return nodes
+  }, [])
 
   return (
     <div className={`relative flex items-center ${className}`}>
@@ -100,19 +148,8 @@ function SmartTaskInput({
           inputClassName={`w-full rounded-lg border border-slate-200 bg-slate-50 pr-24 text-slate-800 focus:border-indigo-400 focus:outline-none ${compact ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'}`}
           textClassName={`${compact ? 'pl-2.5 py-1.5 text-xs' : 'pl-3 py-2 text-sm'} text-slate-800`}
           placeholderClassName="text-slate-400"
+          renderOverlayText={renderOverlayText}
         />
-
-        {/* Alias highlight overlay */}
-        {alias && (
-          <span
-            className="pointer-events-none absolute top-1/2 -translate-y-1/2 overflow-hidden"
-            aria-hidden
-          >
-            <span className="invisible whitespace-pre" style={{ fontSize: compact ? 12 : 14 }}>
-              {value.slice(0, alias.startIndex)}
-            </span>
-          </span>
-        )}
 
         {/* Date badge + calendar icon cluster */}
         <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">

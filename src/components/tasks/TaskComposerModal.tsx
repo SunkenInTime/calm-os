@@ -6,11 +6,15 @@ import { useSmartTaskInput } from '../../lib/useSmartTaskInput'
 type TaskComposerModalProps = {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (title: string, dueDate: string | null) => Promise<void>
+  onSubmit: (
+    title: string,
+    dueDate: string | null,
+    sessionLengthMinutes: number | null,
+  ) => Promise<void>
 }
 
 function TaskComposerModal({ isOpen, onClose, onSubmit }: TaskComposerModalProps) {
-  const { title, setTitle, resolvedDate, setResolvedDate, getCleanTitle, reset } =
+  const { title, setTitle, resolvedDate, setResolvedDate, getTaskDraft, reset } =
     useSmartTaskInput()
   const inputRef = useRef<HTMLInputElement>(null)
   const isSubmittingRef = useRef(false)
@@ -35,11 +39,11 @@ function TaskComposerModal({ isOpen, onClose, onSubmit }: TaskComposerModalProps
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const cleanTitle = getCleanTitle()
-    if (!cleanTitle || isSubmittingRef.current) return
+    const taskDraft = getTaskDraft()
+    if (!taskDraft.title || isSubmittingRef.current) return
     try {
       isSubmittingRef.current = true
-      await onSubmit(cleanTitle, resolvedDate)
+      await onSubmit(taskDraft.title, taskDraft.dueDate, taskDraft.sessionLengthMinutes)
       onClose()
     } catch {
       // silently handled
@@ -74,7 +78,7 @@ function TaskComposerModal({ isOpen, onClose, onSubmit }: TaskComposerModalProps
             onChange={setTitle}
             resolvedDate={resolvedDate}
             onResolvedDate={setResolvedDate}
-            placeholder="Task title... (try TD, TM, MON-SUN)"
+            placeholder="Task title... (try TD, TM, MON-SUN, or 1h / 45m)"
             inputRef={inputRef}
             className="min-w-0 flex-1"
           />
@@ -86,7 +90,7 @@ function TaskComposerModal({ isOpen, onClose, onSubmit }: TaskComposerModalProps
           </button>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">
-          Type TD for today, TM for tomorrow, or a day name (MON, TUE...) to set the due date inline.
+          Add dates inline with TD/TM/day names, and sessions with phrases like "deep work 90m".
         </p>
       </form>
     </div>
